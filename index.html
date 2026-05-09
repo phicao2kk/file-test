@@ -2036,11 +2036,13 @@ async function showHistory() {
 
 function renderHistoryItems(items) {
     const listContainer = document.getElementById('history-list');
-    listContainer.innerHTML = items.map(item => `
+    listContainer.innerHTML = items.map(item => {
+        // Chuyển mảng fields thành chuỗi base64 để truyền an toàn qua HTML attribute
+        const fieldsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(item.fields))));
+        
+        return `
         <div class="history-item glass p-4 lg:p-5 rounded-2xl border border-white/5 hover:border-indigo-500/20 transition-all group mb-2">
             <div class="flex flex-col gap-4">
-                
-                <!-- THÔNG TIN TIÊU ĐỀ -->
                 <div class="space-y-1">
                     <h4 class="font-black text-[13px] lg:text-sm text-white uppercase group-hover:text-indigo-400 transition-colors tracking-tight truncate">
                         ${item.title}
@@ -2051,41 +2053,60 @@ function renderHistoryItems(items) {
                     </div>
                 </div>
 
-                <!-- HÀNG 4 NÚT DÀI ĐỀU NHAU (Tối ưu cho cả Mobile & PC) -->
                 <div class="grid grid-cols-4 gap-1.5 lg:gap-2">
-                    
-                    <!-- Nút Xuất Excel -->
                     <button onclick="exportSpecificSession('${item.code}')" 
                             class="flex flex-col items-center justify-center gap-1 py-2.5 bg-emerald-500/10 text-emerald-500 rounded-xl border border-emerald-500/20 active:scale-95 transition-all">
                         <i class="fa-solid fa-file-excel text-xs"></i>
                         <span class="text-[8px] font-black uppercase">Excel</span>
                     </button>
 
-                    <!-- Nút Xem Báo Cáo -->
                     <button onclick="restoreSession('${item.code}')" 
                             class="flex flex-col items-center justify-center gap-1 py-2.5 bg-indigo-500/10 text-indigo-500 rounded-xl border border-indigo-500/20 active:scale-95 transition-all">
                         <i class="fa-solid fa-chart-column text-xs"></i>
                         <span class="text-[8px] font-black uppercase">Xem</span>
                     </button>
 
-                    <!-- Nút Đối Soát Vắng (Gán data và kích hoạt input file) -->
-                    <button onclick="currentSession={code:'${item.code}', title:'${item.title}', fields:${JSON.stringify(item.fields)}}; document.getElementById('master-file-input').click()" 
+                    <!-- Nút Soát Vắng gọi hàm trung gian -->
+                    <button onclick="prepareAbsentCheck('${item.code}', '${item.title.replace(/'/g, "\\'")}', '${fieldsBase64}')" 
                             class="flex flex-col items-center justify-center gap-1 py-2.5 bg-amber-500/10 text-amber-500 rounded-xl border border-amber-500/20 active:scale-95 transition-all">
                         <i class="fa-solid fa-user-check text-xs"></i>
                         <span class="text-[8px] font-black uppercase">Soát Vắng</span>
                     </button>
 
-                    <!-- Nút Xóa Đơn Lẻ -->
                     <button onclick="deleteSession('${item.code}')" 
                             class="flex flex-col items-center justify-center gap-1 py-2.5 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 active:scale-95 transition-all">
                         <i class="fa-solid fa-trash-can text-xs"></i>
                         <span class="text-[8px] font-black uppercase">Xóa</span>
                     </button>
-
                 </div>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
+}
+
+function prepareAbsentCheck(code, title, fieldsBase64) {
+    try {
+        // Giải mã mảng fields từ Base64
+        const fields = JSON.parse(decodeURIComponent(escape(atob(fieldsBase64))));
+        
+        // Thiết lập currentSession để hàm handleFileSelected có thể sử dụng
+        currentSession = {
+            code: code,
+            title: title,
+            fields: fields
+        };
+
+        // Kích hoạt input file ẩn
+        const fileInput = document.getElementById('master-file-input');
+        if (fileInput) {
+            fileInput.click();
+        } else {
+            showToast("Lỗi: Không tìm thấy trình chọn file!", "error");
+        }
+    } catch (e) {
+        console.error("Lỗi chuẩn bị đối soát:", e);
+        showToast("Lỗi xử lý dữ liệu sự kiện!", "error");
+    }
 }
 
 // Hàm lọc tìm kiếm trong lịch sử

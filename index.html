@@ -3071,17 +3071,15 @@ async function exportAbsentList() {
                 });
             }
         });
-        
-        // 2. ÉP CĂN TRÁI RIÊNG CHO CÁC DÒNG TIÊU ĐỀ (Để không bị lệnh trên đè mất)
-        // Chúng ta duyệt lại tất cả các dòng, dòng nào chứa ký tự "➤" thì ép căn trái
+
+        // 2. Giữ nguyên phần căn lề trái đã sửa ở bước trước
         worksheet.eachRow((row) => {
             const firstCellValue = String(row.getCell(1).value || "");
             if (firstCellValue.includes("➤")) {
-                row.getCell(1).alignment = { 
-                    vertical: 'middle', 
-                    horizontal: 'left', 
-                    indent: 1 
-                };
+                row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+                // Dòng tiêu đề danh sách thường không cần viền khung bao quanh, 
+                // nếu bạn muốn xóa viền của riêng dòng ➤ thì dùng lệnh dưới:
+                row.eachCell((cell) => { cell.border = undefined; });
             }
         });
 

@@ -2991,6 +2991,8 @@ async function exportAbsentList() {
         t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()} (CÓ MẶT: ${presentLogs.length} | VẮNG: ${absentList.length})`;
         t2.font = { name: 'Times New Roman', size: 12, bold: true, italic: true };
         t2.alignment = { vertical: 'middle', horizontal: 'center' };
+        
+        let currentRow = 4;
 
         // --- PHẦN I: DANH SÁCH THÀNH VIÊN THAM GIA ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);

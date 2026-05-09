@@ -3055,6 +3055,23 @@ async function exportAbsentList() {
             col.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
         });
 
+        // --- PHẦN KẺ VIỀN KHUNG CHO BẢNG ---
+        worksheet.eachRow((row, rowNumber) => {
+            // Chỉ kẻ viền cho dữ liệu từ dòng 4 trở đi (Bỏ qua 3 dòng tiêu đề chính ở trên)
+            if (rowNumber >= 4) {
+                row.eachCell({ includeEmpty: false }, (cell) => {
+                    // Kiểm tra nếu ô này không phải là dòng tiêu đề ➤ (dòng gộp)
+                    // Hoặc đơn giản là kẻ viền cho tất cả các ô có dữ liệu trong bảng
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                });
+            }
+        });
+        
         // 2. ÉP CĂN TRÁI RIÊNG CHO CÁC DÒNG TIÊU ĐỀ (Để không bị lệnh trên đè mất)
         // Chúng ta duyệt lại tất cả các dòng, dòng nào chứa ký tự "➤" thì ép căn trái
         worksheet.eachRow((row) => {

@@ -933,7 +933,7 @@ input:focus {
                 </button>
 
                 <!-- Nút Đối soát vắng (Kích hoạt input file ẩn) -->
-                <button onclick="document.getElementById('master-file-input').click()" class="flex items-center gap-2 px-4 py-3 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-2xl text-[10px] font-black uppercase hover:bg-amber-500 hover:text-white transition-all">
+                <button onclick="openUploadModal()" class="flex items-center gap-2 px-4 py-3 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-2xl text-[10px] font-black uppercase hover:bg-amber-500 hover:text-white transition-all">
                     <i class="fa-solid fa-user-slash"></i> Đối soát vắng
                 </button>
 
@@ -2084,31 +2084,6 @@ function renderHistoryItems(items) {
     }).join('');
 }
 
-function prepareAbsentCheck(code, title, fieldsBase64) {
-    try {
-        // Giải mã mảng fields từ Base64
-        const fields = JSON.parse(decodeURIComponent(escape(atob(fieldsBase64))));
-        
-        // Thiết lập currentSession để hàm handleFileSelected có thể sử dụng
-        currentSession = {
-            code: code,
-            title: title,
-            fields: fields
-        };
-
-        // Kích hoạt input file ẩn
-        const fileInput = document.getElementById('master-file-input');
-        if (fileInput) {
-            fileInput.click();
-        } else {
-            showToast("Lỗi: Không tìm thấy trình chọn file!", "error");
-        }
-    } catch (e) {
-        console.error("Lỗi chuẩn bị đối soát:", e);
-        showToast("Lỗi xử lý dữ liệu sự kiện!", "error");
-    }
-}
-
 // Hàm lọc tìm kiếm trong lịch sử
 function filterHistory() {
     const query = document.getElementById('history-search').value.toLowerCase();
@@ -3057,7 +3032,7 @@ async function exportAbsentList() {
         t3.alignment = { vertical: 'middle', horizontal: 'center' };
         worksheet.getRow(3).height = 25;
 
-        let currentRow = 5;
+        let currentRow = 4;
 
         // --- PHẦN I: DANH SÁCH THÀNH VIÊN THAM GIA ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);
@@ -3185,6 +3160,96 @@ async function deleteSession(code) {
     });
 }
 
+// --- HỆ THỐNG XỬ LÝ MODAL KÉO THẢ FILE (MỚI) ---
+
+// 1. Hàm mở Modal
+function openUploadModal() {
+    if (!currentSession || !currentSession.code) {
+        return showToast("Vui lòng kích hoạt hoặc chọn 1 sự kiện!", "error");
+    }
+    const modal = document.getElementById('upload-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    // Khởi tạo các sự kiện kéo thả khi modal mở
+    initDragAndDrop();
+}
+
+// 2. Hàm đóng Modal
+function closeUploadModal() {
+    const modal = document.getElementById('upload-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+// 3. Logic xử lý Kéo và Thả
+function initDragAndDrop() {
+    const dropZone = document.getElementById('drop-zone');
+    const dropOverlay = document.getElementById('drop-overlay');
+    const fileInput = document.getElementById('master-file-input');
+
+    // Ngăn chặn hành động mở file mặc định của trình duyệt
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, e => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
+    });
+
+    // Khi đang kéo file vào vùng Drop Zone (Hiện overlay xanh)
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropOverlay.classList.remove('hidden');
+            dropOverlay.classList.add('flex');
+        });
+    });
+
+    // Khi kéo file ra khỏi vùng hoặc đã thả xong (Ẩn overlay)
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropOverlay.classList.add('hidden');
+            dropOverlay.classList.remove('flex');
+        });
+    });
+
+    // Xử lý khi thả file (Quan trọng nhất)
+    dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0) {
+            // Kiểm tra xem có phải file Excel không
+            const file = files[0];
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (ext !== 'xlsx' && ext !== 'xls') {
+                return showToast("Hệ thống chỉ hỗ trợ tệp Excel!", "error");
+            }
+
+            // Gán file đã thả vào input file ẩn và chạy hàm xử lý đối soát có sẵn của bạn
+            fileInput.files = files;
+            handleFileSelected(fileInput); // Gọi hàm đối soát gốc của bạn
+            closeUploadModal();            // Đóng modal chọn file
+        }
+    });
+}
+
+// 4. Sửa lại hàm prepareAbsentCheck trong lịch sử để nó cũng mở Modal này
+function prepareAbsentCheck(code, title, fieldsBase64) {
+    try {
+        const fields = JSON.parse(decodeURIComponent(escape(atob(fieldsBase64))));
+        currentSession = {
+            code: code,
+            title: title,
+            fields: fields
+        };
+        // Mở modal kéo thả thay vì mở trực tiếp trình chọn tệp
+        openUploadModal();
+    } catch (e) {
+        console.error("Lỗi chuẩn bị đối soát:", e);
+        showToast("Lỗi xử lý dữ liệu sự kiện!", "error");
+    }
+}
+
 </script>
 <!-- MODAL LỊCH SỬ SỰ KIỆN -->
 <div id="history-modal" class="fixed inset-0 z-[10004] hidden items-center justify-center bg-black/90 backdrop-blur-md p-4">
@@ -3231,6 +3296,53 @@ async function deleteSession(code) {
             <button onclick="closeComparisonModal()" class="flex-1 py-4 bg-white/5 rounded-2xl font-black uppercase text-[10px] text-slate-400">Đóng</button>
             <button onclick="exportAbsentList()" class="flex-1 py-4 bg-emerald-600 rounded-2xl font-black uppercase text-[10px] text-white">Tải Báo Cáo</button>
         </div>
+    </div>
+</div>
+
+<!-- MODAL KÉO THẢ FILE ĐỐI SOÁT -->
+<div id="upload-modal" class="fixed inset-0 z-[11000] hidden items-center justify-center bg-black/95 backdrop-blur-xl p-4" onclick="closeUploadModal()">
+    <div class="glass p-8 lg:p-12 rounded-[40px] max-w-2xl w-full text-center space-y-8 animate-in zoom-in duration-300 border border-white/10" onclick="event.stopPropagation()">
+        
+        <!-- Header Modal -->
+        <div class="space-y-2">
+            <div class="relative w-24 h-16 mx-auto mb-4">
+                <div class="absolute inset-0 bg-indigo-500/20 blur-2xl rounded-full"></div>
+                <i class="fa-solid fa-file-excel text-5xl text-emerald-400 relative z-10"></i>
+            </div>
+            <h3 class="text-2xl lg:text-3xl font-black uppercase italic text-white">Đối soát danh sách</h3>
+            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-[2px]">Tải lên file Excel mẫu để hệ thống tự động lọc vắng</p>
+        </div>
+
+        <!-- Vùng Kéo Thả (Drop Zone) -->
+        <div id="drop-zone" 
+             class="group relative border-2 border-dashed border-white/10 rounded-[32px] p-12 lg:p-20 transition-all duration-300 hover:border-indigo-500/50 hover:bg-white/5 cursor-pointer"
+             onover="handleDragOver(event)"
+             onleave="handleDragLeave(event)"
+             ondrop="handleDrop(event)"
+             onclick="document.getElementById('master-file-input').click()">
+            
+            <div class="space-y-6">
+                <!-- Nút Browse -->
+                <button class="bg-gradient-to-r from-pink-500 to-rose-500 px-10 py-4 rounded-full text-white font-black uppercase text-xs shadow-lg shadow-rose-500/20 group-hover:scale-110 transition-transform flex items-center gap-3 mx-auto">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Bấm để chọn tệp
+                </button>
+                
+                <div class="space-y-1">
+                    <p class="text-white font-bold text-sm">Hoặc kéo thả file Excel vào đây</p>
+                    <p class="text-slate-500 text-[10px] font-medium italic">Hỗ trợ định dạng .xlsx, .xls</p>
+                </div>
+            </div>
+
+            <!-- Hiệu ứng khi đang kéo file đè lên -->
+            <div id="drop-overlay" class="absolute inset-0 bg-indigo-600/20 rounded-[30px] hidden items-center justify-center backdrop-blur-sm border-2 border-indigo-500 shadow-[0_0_50px_rgba(99,102,241,0.3)]">
+                 <div class="text-center animate-bounce">
+                    <i class="fa-solid fa-file-circle-check text-5xl text-white"></i>
+                    <p class="text-white font-black uppercase text-sm mt-4 italic">Thả file để check ngay!</p>
+                 </div>
+            </div>
+        </div>
+
+        <button onclick="closeUploadModal()" class="text-[10px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors">Hủy bỏ thao tác</button>
     </div>
 </div>
 

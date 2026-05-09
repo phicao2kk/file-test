@@ -2980,18 +2980,17 @@ async function exportAbsentList() {
         // Cấu hình xem: Khóa dòng 1, 2, 3
         worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
 
-        // --- DÒNG 1 & 2: TIÊU ĐỀ CHUNG ---
+        // TIÊU ĐỀ HỆ THỐNG
         worksheet.mergeCells(1, 1, 1, maxCols);
         const t1 = worksheet.getCell(1, 1);
         t1.value = "S-CHECK PRO - BÁO CÁO ĐỐI SOÁT TỔNG HỢP";
-        t1.font = { name: 'Times New Roman', size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
-        t1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+        t1.font = { name: 'Times New Roman', size: 16, bold: true };
         t1.alignment = { vertical: 'middle', horizontal: 'center' };
 
         worksheet.mergeCells(2, 1, 2, maxCols);
         const t2 = worksheet.getCell(2, 1);
-        t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()} | NGÀY XUẤT: ${new Date().toLocaleString('vi-VN')}`;
-        t2.font = { name: 'Times New Roman', size: 11, italic: true };
+        t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()} (CÓ MẶT: ${presentLogs.length} | VẮNG: ${absentList.length})`;
+        t2.font = { name: 'Times New Roman', size: 12, bold: true, italic: true };
         t2.alignment = { vertical: 'middle', horizontal: 'center' };
 
         // --- PHẦN I: DANH SÁCH CÓ MẶT ---

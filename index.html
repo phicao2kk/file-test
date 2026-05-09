@@ -2979,21 +2979,28 @@ async function exportAbsentList() {
         // Khóa các dòng tiêu đề (Dòng 1, 2, 3)
         worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
 
-        // --- DÒNG 1: TIÊU ĐỀ CHÍNH (CỠ 22) ---
+        // --- DÒNG 1: TIÊU ĐỀ CHÍNH (CỠ 18) ---
         worksheet.mergeCells(1, 1, 1, maxCols);
         const t1 = worksheet.getCell(1, 1);
         t1.value = "S-CHECK PRO - BÁO CÁO ĐỐI SOÁT TỔNG HỢP";
-        t1.font = { name: 'Times New Roman', size: 17, bold: true, color: { argb: 'FF000000' } };
+        t1.font = { name: 'Times New Roman', size: 18, bold: true, color: { argb: 'FF000000' } };
         t1.alignment = { vertical: 'middle', horizontal: 'center' };
-        worksheet.getRow(1).height = 40;
+        worksheet.getRow(1).height = 35;
 
-        // --- DÒNG 2: THÔNG TIN SỰ KIỆN (CỠ 14) ---
+        // --- DÒNG 2: TÊN SỰ KIỆN (CỠ 14) ---
         worksheet.mergeCells(2, 1, 2, maxCols);
         const t2 = worksheet.getCell(2, 1);
-        t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()} | TRẠNG THÁI: CÓ MẶT (${presentLogs.length}) - VẮNG (${absentList.length})`;
-        t2.font = { name: 'Times New Roman', size: 13, bold: true, italic: true, color: { argb: 'FF334155' } };
+        t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()}`;
+        t2.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF334155' } };
         t2.alignment = { vertical: 'middle', horizontal: 'center' };
         worksheet.getRow(2).height = 25;
+
+        // --- DÒNG 3: TRẠNG THÁI (ĐÃ TÁCH XUỐNG ĐÂY) ---
+        worksheet.mergeCells(3, 1, 3, maxCols);
+        const t3 = worksheet.getCell(3, 1);
+        t3.value = `TRẠNG THÁI: CÓ MẶT (${presentLogs.length}) - VẮNG (${absentList.length})`;
+        t3.font = { name: 'Times New Roman', size: 12, bold: true, italic: true, color: { argb: 'FF10B981' } }; // Màu xanh Emerald
+        t3.alignment = { vertical: 'middle', horizontal: 'center'
 
         let currentRow = 4;
 

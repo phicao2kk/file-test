@@ -2999,10 +2999,12 @@ async function exportAbsentList() {
         worksheet.mergeCells(3, 1, 3, maxCols);
         const t3 = worksheet.getCell(3, 1);
         t3.value = `TRẠNG THÁI: CÓ MẶT (${presentLogs.length}) - VẮNG (${absentList.length})`;
-        t3.font = { name: 'Times New Roman', size: 12, bold: true, italic: true, color: { argb: 'FF10B981' } }; // Màu xanh Emerald
-        t3.alignment = { vertical: 'middle', horizontal: 'center'
+        t3.font = { name: 'Times New Roman', size: 12, bold: true, italic: true, color: { argb: 'FF10B981' } }; 
+        t3.alignment = { vertical: 'middle', horizontal: 'center' };
+        worksheet.getRow(3).height = 20;
 
-        let currentRow = 4;
+        // Bắt đầu dữ liệu từ dòng 5 (để cách ra 1 dòng trống cho đẹp)
+        let currentRow = 5;
 
         // --- PHẦN I: DANH SÁCH THÀNH VIÊN THAM GIA ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);
@@ -3022,7 +3024,7 @@ async function exportAbsentList() {
             rows: presentRows.length > 0 ? presentRows : [new Array(attendeeFields.length).fill("")]
         });
 
-        // Tính toán vị trí cho bảng tiếp theo (Cách 3 dòng)
+        // Tính toán vị trí cho bảng tiếp theo (Cách 3 dòng sau bảng trên)
         currentRow += (presentRows.length > 0 ? presentRows.length : 1) + 3;
 
         // --- PHẦN II: DANH SÁCH VẮNG MẶT ---
@@ -3030,7 +3032,7 @@ async function exportAbsentList() {
         const title2 = worksheet.getCell(currentRow, 1);
         title2.value = "➤ DANH SÁCH THÀNH VIÊN VẮNG MẶT (CHƯA ĐIỂM DANH)";
         title2.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFE11D48' } };
-        title2.alignment = { vertical: 'middle', horizontal: 'left' }; // Căn trái tuyệt đối
+        title2.alignment = { vertical: 'middle', horizontal: 'left' };
         currentRow++;
 
         const absentRowsData = absentList.map((data, i) => [i + 1, ...data]);
@@ -3046,7 +3048,7 @@ async function exportAbsentList() {
         // Căn chỉnh độ rộng cột và Font mặc định cho dữ liệu
         worksheet.columns.forEach((col, i) => {
             col.width = i === 0 ? 8 : 25;
-            col.alignment = { vertical: 'middle', horizontal: 'center' };
+            col.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
         });
 
         const buffer = await workbook.xlsx.writeBuffer();

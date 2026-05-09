@@ -3092,7 +3092,8 @@ async function exportAbsentList() {
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
-        saveAs(new Blob([buffer]), `Bao_Cao_Doi_Soat_${currentSession.code}.xlsx`);
+        // Tên file sẽ hiển thị: Báo Cáo Đối Soát Vắng (Tên sự kiện của bạn).xlsx
+        saveAs(new Blob([buffer]), `Báo Cáo Đối Soát Vắng (${currentSession.title}).xlsx`);
         showToast("Xuất báo cáo thành công!", "success");
 
     } catch (e) {

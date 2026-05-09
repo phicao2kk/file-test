@@ -3043,7 +3043,7 @@ async function exportAbsentList() {
         t2.alignment = { vertical: 'middle', horizontal: 'center' };
         worksheet.getRow(2).height = 25;
 
-        // --- DÒNG 3: TRẠNG THÁI (SỬ DỤNG RICH TEXT ĐỂ ĐỔI MÀU TỪNG CHỮ) ---
+        // --- DÒNG 3: TRẠNG THÁI (SỬ DỤNG RICH TEXT CHUẨN 8 KÝ TỰ ARGB) ---
         worksheet.mergeCells(3, 1, 3, maxCols);
         const t3 = worksheet.getCell(3, 1);
 
@@ -3051,19 +3051,19 @@ async function exportAbsentList() {
             richText: [
                 { 
                     text: "TRẠNG THÁI: ", 
-                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF000000' } } 
+                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF000000' } } // Đen
                 },
                 { 
                     text: `CÓ MẶT (${presentLogs.length})`, 
-                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF3F51B5' } } 
+                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF3F51B5' } } // Xanh Indigo
                 },
                 { 
                     text: " - ", 
-                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF000000' } } 
+                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF000000' } } // Đen
                 },
                 { 
                     text: `VẮNG (${absentList.length})`, 
-                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF334155' } } 
+                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FFE11D48' } } // Đỏ Rose (Đã sửa)
                 }
             ]
         };

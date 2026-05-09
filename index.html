@@ -2893,6 +2893,9 @@ const HEADER_KEYWORDS = ['họ tên', 'họ và tên', 'tên', 'fullname', 'full
 async function handleFileSelected(input) {
     if (!input.files || !input.files[0]) return;
     
+    // THÊM DÒNG NÀY: Đóng ngay modal chọn tệp để hiện modal kết quả
+    closeUploadModal();
+
     // Kiểm tra xem Admin đã chọn Sự kiện nào chưa
     if (!currentSession || !currentSession.code) {
         input.value = "";
@@ -3269,7 +3272,7 @@ function prepareAbsentCheck(code, title, fieldsBase64) {
     </div>
 </div>
 
-<div id="compare-modal" class="fixed inset-0 z-[10005] hidden items-center justify-center bg-black/90 backdrop-blur-md p-4">
+<div id="compare-modal" class="fixed inset-0 z-[12000] hidden items-center justify-center bg-black/90 backdrop-blur-md p-4">
     <div class="glass p-8 rounded-[32px] max-w-sm w-full border border-white/10 space-y-6 text-center animate-in zoom-in duration-300">
         <div class="flex flex-col items-center gap-2">
             <div class="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-500 mb-2">
@@ -3310,7 +3313,7 @@ function prepareAbsentCheck(code, title, fieldsBase64) {
                 <i class="fa-solid fa-file-excel text-5xl text-emerald-400 relative z-10"></i>
             </div>
             <h3 class="text-2xl lg:text-3xl font-black uppercase italic text-white">Đối soát danh sách</h3>
-            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-[2px]">Tải lên file Excel mẫu để hệ thống tự động lọc vắng</p>
+            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-[2px]">Tải lên file Excel danh sách đầy đủ để hệ thống tự động lọc vắng</p>
         </div>
 
         <!-- Vùng Kéo Thả (Drop Zone) -->

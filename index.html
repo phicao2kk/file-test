@@ -3100,6 +3100,19 @@ async function exportAbsentList() {
             };
         });
 
+        // --- THÊM DÒNG GHI CHÚ CHÂN TRANG (FOOTER) ---
+        // Tính toán hàng tiếp theo sau bảng danh sách vắng
+        const footerRowNumber = currentRow + (absentRowsData.length > 0 ? absentRowsData.length : 1) + 2;
+        
+        worksheet.mergeCells(footerRowNumber, 1, footerRowNumber, maxCols);
+        const footerCell = worksheet.getCell(footerRowNumber, 1);
+        footerCell.value = `Báo cáo được xuất từ hệ thống S-CHECK Pro vào lúc ${new Date().toLocaleString('vi-VN')}`;
+        
+        // Định dạng chữ nghiêng, màu xám, căn lề phải
+        footerCell.font = { name: 'Times New Roman', italic: true, size: 10, color: { argb: 'FF7F7F7F' } };
+        footerCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+        // 3. XUẤT FILE (Đây là đoạn code cũ của bạn, hãy đảm bảo saveAs nằm dưới footer)
         const buffer = await workbook.xlsx.writeBuffer();
         // Tên file sẽ hiển thị: Báo Cáo Đối Soát Vắng (Tên sự kiện của bạn).xlsx
         saveAs(new Blob([buffer]), `Báo Cáo Đối Soát Vắng ${currentSession.title}.xlsx`);

@@ -3093,7 +3093,7 @@ async function exportAbsentList() {
 
         const buffer = await workbook.xlsx.writeBuffer();
         // Tên file sẽ hiển thị: Báo Cáo Đối Soát Vắng (Tên sự kiện của bạn).xlsx
-        saveAs(new Blob([buffer]), `Báo Cáo Đối Soát Vắng (${currentSession.title}).xlsx`);
+        saveAs(new Blob([buffer]), `Báo Cáo Đối Soát Vắng ${currentSession.title}.xlsx`);
         showToast("Xuất báo cáo thành công!", "success");
 
     } catch (e) {

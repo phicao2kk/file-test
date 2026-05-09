@@ -3006,11 +3006,11 @@ function closeComparisonModal() {
     }
 }
 
-// 2. Xuất Báo cáo Tổng hợp (Có mặt + Vắng mặt) - CÓ BỘ LỌC RIÊNG CHO TỪNG BẢNG
+// 2. Xuất Báo cáo Tổng hợp (Có mặt + Vắng mặt)
 async function exportAbsentList() {
     if (masterData.length === 0) return showToast("Dữ liệu trống!", "error");
 
-    showToast("Đang tạo báo cáo đối soát chuyên sâu...", "info");
+    showToast("Đang tạo báo cáo đối soát...", "info");
 
     try {
         const snapshot = await rdb.ref('dynamic_attendance/logs/' + currentSession.code).once('value');
@@ -3027,61 +3027,43 @@ async function exportAbsentList() {
         // Khóa các dòng tiêu đề (Dòng 1, 2, 3)
         worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
 
-        // --- DÒNG 1: TIÊU ĐỀ CHÍNH (CỠ 18) ---
+        // --- DÒNG 1: TIÊU ĐỀ CHÍNH ---
         worksheet.mergeCells(1, 1, 1, maxCols);
         const t1 = worksheet.getCell(1, 1);
         t1.value = "S-CHECK PRO - BÁO CÁO ĐỐI SOÁT TỔNG HỢP";
-        t1.font = { name: 'Times New Roman', size: 18, bold: true, color: { argb: 'FF000000' } };
+        t1.font = { name: 'Times New Roman', size: 18, bold: true };
         t1.alignment = { vertical: 'middle', horizontal: 'center' };
         worksheet.getRow(1).height = 35;
 
-        // --- DÒNG 2: TÊN SỰ KIỆN (CỠ 14) ---
+        // --- DÒNG 2: TÊN SỰ KIỆN ---
         worksheet.mergeCells(2, 1, 2, maxCols);
         const t2 = worksheet.getCell(2, 1);
         t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()}`;
         t2.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF334155' } };
         t2.alignment = { vertical: 'middle', horizontal: 'center' };
-        worksheet.getRow(2).height = 25;
 
-        // --- DÒNG 3: TRẠNG THÁI (SỬ DỤNG RICH TEXT CHUẨN 8 KÝ TỰ ARGB) ---
+        // --- DÒNG 3: TRẠNG THÁI (Đã sửa màu đỏ chuẩn) ---
         worksheet.mergeCells(3, 1, 3, maxCols);
         const t3 = worksheet.getCell(3, 1);
-
         t3.value = {
             richText: [
-                { 
-                    text: "TRẠNG THÁI: ", 
-                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF000000' } } // Đen
-                },
-                { 
-                    text: `CÓ MẶT (${presentLogs.length})`, 
-                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF3F51B5' } } // Xanh Indigo
-                },
-                { 
-                    text: " - ", 
-                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF000000' } } // Đen
-                },
-                { 
-                    text: `VẮNG (${absentList.length})`, 
-                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FFE11D48' } } // Đỏ Rose (Đã sửa)
-                }
+                { text: "TRẠNG THÁI: ", font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF000000' } } },
+                { text: `CÓ MẶT (${presentLogs.length})`, font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF3F51B5' } } },
+                { text: " - ", font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF000000' } } },
+                { text: `VẮNG (${absentList.length})`, font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FFE11D48' } } }
             ]
         };
-
         t3.alignment = { vertical: 'middle', horizontal: 'center' };
         worksheet.getRow(3).height = 25;
 
-        // Bắt đầu dữ liệu từ dòng 5 (để cách ra 1 dòng trống cho đẹp)
-        let currentRow = 4;
+        let currentRow = 5; // Bắt đầu danh sách từ dòng 5
 
         // --- PHẦN I: DANH SÁCH THÀNH VIÊN THAM GIA ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);
         const title1 = worksheet.getCell(currentRow, 1);
         title1.value = "➤ DANH SÁCH THÀNH VIÊN THAM GIA (ĐÃ ĐIỂM DANH)";
         title1.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FF3F51B5' } };
-        
-        // SỬA TẠI ĐÂY: horizontal chuyển thành 'left'
-        title1.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }; 
+        title1.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
         currentRow++;
 
         const presentRows = presentLogs.map((log, i) => [i + 1, log.time, ...log.values]);
@@ -3094,22 +3076,20 @@ async function exportAbsentList() {
             rows: presentRows.length > 0 ? presentRows : [new Array(attendeeFields.length).fill("")]
         });
 
-        // Tính toán vị trí cho bảng tiếp theo (Cách 3 dòng sau bảng trên)
+        // Tính toán lại hàng hiện tại sau bảng 1
         currentRow += (presentRows.length > 0 ? presentRows.length : 1) + 3;
 
-        // --- PHẦN II: DANH SÁCH VẮNG MẶT (MÀU HỒNG) ---
+        // --- PHẦN II: DANH SÁCH VẮNG MẶT (CHUYỂN SANG MÀU ĐỎ) ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);
         const title2 = worksheet.getCell(currentRow, 1);
         title2.value = "➤ DANH SÁCH THÀNH VIÊN VẮNG MẶT (CHƯA ĐIỂM DANH)";
-        title2.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFFF1493' } }; // Màu hồng đậm (DeepPink)
+        title2.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFE11D48' } };
         title2.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
         
-        const absentHeaderRowIndex = currentRow + 1; // Lưu lại hàng tiêu đề của bảng
+        const absentHeaderRowIndex = currentRow + 1;
         currentRow++;
 
         const absentRowsData = absentList.map((data, i) => [i + 1, ...data]);
-        
-        // Thêm bảng với theme None để chúng ta tự đổ màu hồng
         worksheet.addTable({
             name: 'TableAbsent',
             ref: `A${currentRow}`,
@@ -3119,93 +3099,49 @@ async function exportAbsentList() {
             rows: absentRowsData.length > 0 ? absentRowsData : [new Array(absentHeaders.length).fill("")]
         });
 
-        // 1. Đổ màu hồng cho Header của bảng vắng
+        // 1. Đổ màu đỏ cho Header bảng vắng
         const absHeaderRow = worksheet.getRow(absentHeaderRowIndex);
         absHeaderRow.eachCell((cell) => {
-            cell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: 'FFFF85A1' } // Màu hồng vừa phải, chuyên nghiệp
-            };
-            cell.font = { name: 'Times New Roman', bold: true, color: { argb: 'FFFFFFFF' } }; // Chữ trắng
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE11D48' } };
+            cell.font = { name: 'Times New Roman', bold: true, color: { argb: 'FFFFFFFF' } };
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
         });
 
-        // 2. Đổ màu hồng nhạt xen kẽ cho các dòng dữ liệu (Stripes)
+        // 2. Định dạng màu và kẻ viền cho dữ liệu bảng vắng
         absentRowsData.forEach((row, i) => {
             const rowNum = absentHeaderRowIndex + 1 + i;
             const rowObj = worksheet.getRow(rowNum);
-            if (i % 2 === 1) { // Các dòng xen kẽ
-                rowObj.eachCell((cell) => {
-                    cell.fill = {
-                        type: 'pattern',
-                        pattern: 'solid',
-                        fgColor: { argb: 'FFFFF0F2' } // Màu hồng pastel cực nhạt
-                    };
-                });
-            }
+            rowObj.eachCell((cell) => {
+                cell.font = { name: 'Times New Roman', size: 11 };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
+                // Dòng xen kẽ màu đỏ nhạt
+                if (i % 2 === 1) {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1F2' } };
+                }
+            });
         });
 
-        currentRow += (absentRowsData.length > 0 ? absentRowsData.length : 1) + 1;
+        // Cập nhật vị trí cuối cùng để đặt Footer
+        const finalDataRow = absentHeaderRowIndex + (absentRowsData.length > 0 ? absentRowsData.length : 1);
+        const footerRowIndex = finalDataRow + 2;
 
-        // 1. Cấu hình độ rộng và căn giữa mặc định cho toàn bộ cột
-        worksheet.columns.forEach((col, i) => {
-            col.width = i === 0 ? 8 : 25;
-            col.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-        });
-
-        // --- PHẦN KẺ VIỀN KHUNG CHO BẢNG ---
-        worksheet.eachRow((row, rowNumber) => {
-            // Chỉ kẻ viền cho dữ liệu từ dòng 4 trở đi (Bỏ qua 3 dòng tiêu đề chính ở trên)
-            if (rowNumber >= 4) {
-                row.eachCell({ includeEmpty: false }, (cell) => {
-                    // Kiểm tra nếu ô này không phải là dòng tiêu đề ➤ (dòng gộp)
-                    // Hoặc đơn giản là kẻ viền cho tất cả các ô có dữ liệu trong bảng
-                    cell.border = {
-                        top: { style: 'thin' },
-                        left: { style: 'thin' },
-                        bottom: { style: 'thin' },
-                        right: { style: 'thin' }
-                    };
-                });
-            }
-        });
-
-        // 2. Giữ nguyên phần căn lề trái đã sửa ở bước trước
-        worksheet.eachRow((row) => {
-            const firstCellValue = String(row.getCell(1).value || "");
-            if (firstCellValue.includes("➤")) {
-                row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-                // Dòng tiêu đề danh sách thường không cần viền khung bao quanh, 
-                // nếu bạn muốn xóa viền của riêng dòng ➤ thì dùng lệnh dưới:
-                row.eachCell((cell) => { cell.border = undefined; });
-            }
-        });
-
-        // 3. Đảm bảo 3 dòng đầu (Tiêu đề chính) vẫn căn giữa cho đẹp
-        [1, 2, 3].forEach(rowNum => {
-            worksheet.getRow(rowNum).getCell(1).alignment = { 
-                vertical: 'middle', 
-                horizontal: 'center' 
-            };
-        });
-
-        // --- THÊM DÒNG GHI CHÚ CHÂN TRANG (FOOTER) ---
-        // Tính toán hàng tiếp theo sau bảng danh sách vắng
-        const footerRowNumber = currentRow + (absentRowsData.length > 0 ? absentRowsData.length : 1) + 2;
-        
-        worksheet.mergeCells(footerRowNumber, 1, footerRowNumber, maxCols);
-        const footerCell = worksheet.getCell(footerRowNumber, 1);
+        // --- DÒNG GHI CHÚ CHÂN TRANG (FIXED) ---
+        worksheet.mergeCells(footerRowIndex, 1, footerRowIndex, maxCols);
+        const footerCell = worksheet.getCell(footerRowIndex, 1);
         footerCell.value = `Báo cáo được xuất từ hệ thống S-CHECK Pro vào lúc ${new Date().toLocaleString('vi-VN')}`;
-        
-        // Định dạng chữ nghiêng, màu xám, căn lề phải
         footerCell.font = { name: 'Times New Roman', italic: true, size: 10, color: { argb: 'FF7F7F7F' } };
         footerCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
-        // 3. XUẤT FILE (Đây là đoạn code cũ của bạn, hãy đảm bảo saveAs nằm dưới footer)
+        // Căn chỉnh độ rộng cột
+        worksheet.columns.forEach((col, i) => {
+            col.width = i === 0 ? 8 : 25;
+        });
+
+        // Xuất file
         const buffer = await workbook.xlsx.writeBuffer();
-        // Tên file sẽ hiển thị: Báo Cáo Đối Soát Vắng (Tên sự kiện của bạn).xlsx
-        saveAs(new Blob([buffer]), `Báo Cáo Đối Soát Vắng ${currentSession.title}.xlsx`);
+        saveAs(new Blob([buffer]), `Báo Cáo Đối Soát ${currentSession.title}.xlsx`);
         showToast("Xuất báo cáo thành công!", "success");
 
     } catch (e) {

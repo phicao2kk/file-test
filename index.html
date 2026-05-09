@@ -3004,15 +3004,17 @@ async function exportAbsentList() {
         worksheet.getRow(3).height = 20;
 
         // Bắt đầu dữ liệu từ dòng 5 (để cách ra 1 dòng trống cho đẹp)
-        let currentRow = 5;
+        let currentRow = 4;
 
         // --- PHẦN I: DANH SÁCH THÀNH VIÊN THAM GIA ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);
         const title1 = worksheet.getCell(currentRow, 1);
         title1.value = "➤ DANH SÁCH THÀNH VIÊN THAM GIA (ĐÃ ĐIỂM DANH)";
         title1.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FF3F51B5' } };
-        title1.alignment = { vertical: 'middle', horizontal: 'left' };
-        currentRow++; 
+        
+        // SỬA TẠI ĐÂY: horizontal chuyển thành 'left'
+        title1.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }; 
+        currentRow++;
 
         const presentRows = presentLogs.map((log, i) => [i + 1, log.time, ...log.values]);
         worksheet.addTable({
@@ -3032,7 +3034,9 @@ async function exportAbsentList() {
         const title2 = worksheet.getCell(currentRow, 1);
         title2.value = "➤ DANH SÁCH THÀNH VIÊN VẮNG MẶT (CHƯA ĐIỂM DANH)";
         title2.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFE11D48' } };
-        title2.alignment = { vertical: 'middle', horizontal: 'left' };
+        
+        // SỬA TẠI ĐÂY: horizontal chuyển thành 'left'
+        title2.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
         currentRow++;
 
         const absentRowsData = absentList.map((data, i) => [i + 1, ...data]);

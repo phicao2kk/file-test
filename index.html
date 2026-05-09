@@ -3043,13 +3043,33 @@ async function exportAbsentList() {
         t2.alignment = { vertical: 'middle', horizontal: 'center' };
         worksheet.getRow(2).height = 25;
 
-        // --- DÒNG 3: TRẠNG THÁI (ĐÃ TÁCH XUỐNG ĐÂY) ---
+        // --- DÒNG 3: TRẠNG THÁI (SỬ DỤNG RICH TEXT ĐỂ ĐỔI MÀU TỪNG CHỮ) ---
         worksheet.mergeCells(3, 1, 3, maxCols);
         const t3 = worksheet.getCell(3, 1);
-        t3.value = `TRẠNG THÁI: CÓ MẶT (${presentLogs.length}) - VẮNG (${absentList.length})`;
-        t3.font = { name: 'Times New Roman', size: 12, bold: true, italic: true, color: { argb: 'FF10B981' } }; 
+
+        t3.value = {
+            richText: [
+                { 
+                    text: "TRẠNG THÁI: ", 
+                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF000000' } } 
+                },
+                { 
+                    text: `CÓ MẶT (${presentLogs.length})`, 
+                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF3F51B5' } } 
+                },
+                { 
+                    text: " - ", 
+                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF000000' } } 
+                },
+                { 
+                    text: `VẮNG (${absentList.length})`, 
+                    font: { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FFFFE11D48' } } 
+                }
+            ]
+        };
+
         t3.alignment = { vertical: 'middle', horizontal: 'center' };
-        worksheet.getRow(3).height = 20;
+        worksheet.getRow(3).height = 25;
 
         // Bắt đầu dữ liệu từ dòng 5 (để cách ra 1 dòng trống cho đẹp)
         let currentRow = 4;

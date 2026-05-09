@@ -2878,13 +2878,15 @@ const HEADER_KEYWORDS = ['họ tên', 'họ và tên', 'tên', 'fullname', 'full
 // 1. Xử lý khi chọn File Excel
 async function handleFileSelected(input) {
     if (!input.files || !input.files[0]) return;
+    
+    // Kiểm tra xem Admin đã chọn Sự kiện nào chưa
     if (!currentSession || !currentSession.code) {
         input.value = "";
-        return showToast("Vui lòng kích hoạt hoặc chọn 1 sự kiện!", "error");
+        return showToast("Vui lòng kích hoạt hoặc chọn 1 sự kiện từ Lịch sử!", "error");
     }
 
     const file = input.files[0];
-    showToast("Đang phân tích dữ liệu...", "info");
+    showToast("Đang phân tích và đối soát dữ liệu...", "info");
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -2892,8 +2894,7 @@ async function handleFileSelected(input) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-            // Lấy toàn bộ dữ liệu, không bỏ sót cột rỗng ở giữa
-            const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+            const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
             if (rawRows.length < 1) return showToast("File không có dữ liệu!", "error");
 
@@ -2901,13 +2902,12 @@ async function handleFileSelected(input) {
             let headerRowIndex = -1;
             const firstFieldLabel = currentSession.fields[0].toLowerCase().trim();
 
-            // Tìm hàng tiêu đề (quét kỹ hơn)
-            for (let i = 0; i < Math.min(20, rawRows.length); i++) {
+            // Tìm hàng tiêu đề và cột chứa thông tin định danh (Họ tên/ID)
+            for (let i = 0; i < Math.min(15, rawRows.length); i++) {
                 const row = rawRows[i] || [];
                 for (let j = 0; j < row.length; j++) {
                     const cellVal = String(row[j] || "").toLowerCase().trim();
                     if (!cellVal) continue;
-                    // Ưu tiên khớp với tên trường của App hoặc từ khóa phổ biến
                     if (cellVal === firstFieldLabel || HEADER_KEYWORDS.some(k => cellVal.includes(k))) {
                         colIndex = j; headerRowIndex = i; break;
                     }
@@ -2923,44 +2923,35 @@ async function handleFileSelected(input) {
             const snapshot = await rdb.ref('dynamic_attendance/logs/' + currentSession.code).once('value');
             if (snapshot.exists()) {
                 Object.values(snapshot.val()).forEach(log => {
-                    if (log.values && log.values[0]) {
-                        presentValues.push(log.values[0].toString().trim().toLowerCase());
-                    }
+                    if (log.values && log.values[0]) presentValues.push(log.values[0].toString().trim().toLowerCase());
                 });
             }
 
-            // Lọc danh sách vắng
+            // Tiến hành lọc danh sách vắng
             absentList = [];
             let presentCount = 0;
-            // masterData sẽ bắt đầu từ hàng tiêu đề trở đi
             masterData = rawRows.slice(headerRowIndex); 
 
             for (let i = 1; i < masterData.length; i++) {
                 const row = masterData[i];
-                // Kiểm tra xem hàng có dữ liệu không (tránh hàng trắng ở cuối file)
-                if (!row || row.every(cell => cell === "")) continue;
-
+                if (!row || row.length === 0) continue;
                 const identifier = row[colIndex] ? String(row[colIndex]).trim() : "";
                 if (!identifier) continue; 
 
-                if (presentValues.includes(identifier.toLowerCase())) {
-                    presentCount++;
-                } else {
-                    absentList.push(row); // Đẩy nguyên mảng hàng vào
-                }
+                if (presentValues.includes(identifier.toLowerCase())) presentCount++;
+                else absentList.push(row);
             }
 
-            // Hiển thị Modal
+            // Hiển thị Modal kết quả
             document.getElementById('res-total').innerText = masterData.length - 1;
             document.getElementById('res-present').innerText = presentCount;
             document.getElementById('res-absent').innerText = absentList.length;
-            document.getElementById('detected-column-info').innerText = "ĐÃ NHẬN DIỆN CỘT: " + detectedHeaderName;
+            document.getElementById('detected-column-info').innerText = "NHẬN DIỆN: " + detectedHeaderName;
             
             document.getElementById('compare-modal').classList.remove('hidden');
             document.getElementById('compare-modal').classList.add('flex');
             input.value = ""; 
         } catch (err) {
-            console.error(err);
             showToast("Lỗi đọc file Excel!", "error");
         }
     };
@@ -2971,111 +2962,88 @@ async function handleFileSelected(input) {
 async function exportAbsentList() {
     if (masterData.length === 0) return showToast("Dữ liệu trống!", "error");
 
-    showToast("Đang tạo báo cáo tổng hợp...", "info");
+    showToast("Đang tạo báo cáo chuyên nghiệp...", "info");
 
     try {
         const snapshot = await rdb.ref('dynamic_attendance/logs/' + currentSession.code).once('value');
         const presentLogs = snapshot.exists() ? Object.values(snapshot.val()) : [];
 
         const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('BaoCaoDoiSoat');
+        const worksheet = workbook.addWorksheet('DoiSoatTongHop');
 
-        // Lấy tiêu đề từ file gốc
+        const attendeeCols = currentSession.fields.length + 2;
         const masterHeaders = masterData[0] || [];
-        
-        // Tính toán số cột lớn nhất để Merge tiêu đề (STT + số cột dữ liệu)
-        const attendeeCols = currentSession.fields.length + 2; 
         const absentCols = masterHeaders.length + 1;
         const maxCols = Math.max(attendeeCols, absentCols);
 
-        // 1. CỐ ĐỊNH DÒNG VÀ CỘT
-        worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 5, activeCell: 'B6' }];
+        // KHÓA DÒNG 1,2,3 VÀ CỘT A (STT)
+        worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 3, activeCell: 'B4' }];
 
-        // 2. TIÊU ĐỀ CHÍNH
+        // TIÊU ĐỀ HỆ THỐNG
         worksheet.mergeCells(1, 1, 1, maxCols);
-        const mainTitle = worksheet.getCell(1, 1);
-        mainTitle.value = "BÁO CÁO TỔNG HỢP ĐIỂM DANH & ĐỐI SOÁT VẮNG";
-        mainTitle.font = { name: 'Times New Roman', size: 18, bold: true };
-        mainTitle.alignment = { vertical: 'middle', horizontal: 'center' };
+        const t1 = worksheet.getCell(1, 1);
+        t1.value = "S-CHECK PRO - BÁO CÁO ĐỐI SOÁT TỔNG HỢP";
+        t1.font = { name: 'Times New Roman', size: 16, bold: true };
+        t1.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        // 3. BẢNG TÓM TẮT (SUMMARY)
-        worksheet.mergeCells(2, 1, 3, 2);
-        const summaryCell = worksheet.getCell(2, 1);
-        summaryCell.value = `TỔNG: ${masterData.length - 1}\nCÓ MẶT: ${presentLogs.length}\nVẮNG: ${absentList.length}`;
-        summaryCell.font = { name: 'Times New Roman', bold: true, size: 10 };
-        summaryCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
-        summaryCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-        summaryCell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
+        worksheet.mergeCells(2, 1, 2, maxCols);
+        const t2 = worksheet.getCell(2, 1);
+        t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()} (CÓ MẶT: ${presentLogs.length} | VẮNG: ${absentList.length})`;
+        t2.font = { name: 'Times New Roman', size: 12, bold: true, italic: true };
+        t2.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        worksheet.mergeCells(2, 3, 2, maxCols);
-        worksheet.getCell(2, 3).value = "Sự kiện: " + currentSession.title.toUpperCase();
-        worksheet.getCell(2, 3).font = { name: 'Times New Roman', bold: true };
-        
-        worksheet.mergeCells(3, 3, 3, maxCols);
-        worksheet.getCell(3, 3).value = "Ngày xuất: " + new Date().toLocaleString('vi-VN');
-        worksheet.getCell(3, 3).font = { name: 'Times New Roman', italic: true };
-
-        // --- PHẦN I: DANH SÁCH CÓ MẶT ---
-        const rowI = worksheet.addRow(["I. DANH SÁCH THÀNH VIÊN ĐÃ CÓ MẶT"]);
-        worksheet.mergeCells(rowI.number, 1, rowI.number, maxCols);
-        rowI.getCell(1).font = { name: 'Times New Roman', bold: true, color: { argb: 'FF3F51B5' } };
-
-        const headPresent = worksheet.addRow(["STT", "Dấu thời gian", ...currentSession.fields]);
-        headPresent.eachCell(c => {
+        // PHẦN I: DANH SÁCH CÓ MẶT
+        const h1 = worksheet.getRow(3);
+        h1.values = ["STT", "Dấu thời gian", ...currentSession.fields];
+        h1.eachCell(c => {
             c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3F51B5' } };
             c.font = { name: 'Times New Roman', color: { argb: 'FFFFFFFF' }, bold: true };
-            c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
             c.alignment = { horizontal: 'center' };
+            c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
         });
 
-        presentLogs.forEach((log, index) => {
-            const r = worksheet.addRow([index + 1, log.time, ...log.values]);
+        presentLogs.forEach((log, i) => {
+            const r = worksheet.addRow([i + 1, log.time, ...log.values]);
             r.eachCell(c => {
                 c.font = { name: 'Times New Roman' };
-                c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
                 c.alignment = { horizontal: 'center' };
+                c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
             });
         });
 
-        worksheet.addRow([]); // Cách 1 dòng
+        worksheet.addRow([]); worksheet.addRow([]); // Khoảng cách
 
-        // --- PHẦN II: DANH SÁCH VẮNG MẶT ---
-        const rowII = worksheet.addRow(["II. DANH SÁCH THÀNH VIÊN VẮNG MẶT (CHƯA ĐIỂM DANH)"]);
-        worksheet.mergeCells(rowII.number, 1, rowII.number, maxCols);
-        rowII.getCell(1).font = { name: 'Times New Roman', bold: true, color: { argb: 'FFE11D48' } };
+        // PHẦN II: DANH SÁCH VẮNG
+        const rVang = worksheet.addRow(["DANH SÁCH THÀNH VIÊN VẮNG MẶT"]);
+        worksheet.mergeCells(rVang.number, 1, rVang.number, maxCols);
+        rVang.getCell(1).font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FFE11D48' } };
 
-        // Header bảng vắng (Lấy đủ toàn bộ cột từ file master)
-        const headAbsent = worksheet.addRow(["STT", ...masterHeaders]);
-        headAbsent.eachCell(c => {
+        const h2 = worksheet.addRow(["STT", ...masterHeaders]);
+        h2.eachCell(c => {
             c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE11D48' } };
             c.font = { name: 'Times New Roman', color: { argb: 'FFFFFFFF' }, bold: true };
-            c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
             c.alignment = { horizontal: 'center' };
+            c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
         });
 
-        // Dữ liệu bảng vắng
-        absentList.forEach((dataRow, index) => {
-            // dataRow là mảng đầy đủ thông tin của 1 hàng từ file gốc
-            const r = worksheet.addRow([index + 1, ...dataRow]);
+        absentList.forEach((data, i) => {
+            const r = worksheet.addRow([i + 1, ...data]);
             r.eachCell(c => {
                 c.font = { name: 'Times New Roman' };
-                c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
                 c.alignment = { horizontal: 'center' };
+                c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
                 c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
             });
         });
 
-        // Căn dãn cột
-        worksheet.columns.forEach((col, i) => {
-            col.width = i === 0 ? 8 : 25;
-        });
+        worksheet.columns.forEach(col => col.width = 22);
+        worksheet.getColumn(1).width = 8;
 
         const buffer = await workbook.xlsx.writeBuffer();
-        saveAs(new Blob([buffer]), `Bao_Cao_Tong_Hop_${currentSession.title}.xlsx`);
-        showToast("Đã xuất báo cáo đầy đủ!", "success");
+        saveAs(new Blob([buffer]), `Bao_Cao_Doi_Soat_${currentSession.title}.xlsx`);
+        showToast("Tải báo cáo thành công!", "success");
     } catch (e) {
-        console.error(e);
-        showToast("Lỗi khi tạo file báo cáo!", "error");
+        showToast("Lỗi xuất file!", "error");
     }
 }
 

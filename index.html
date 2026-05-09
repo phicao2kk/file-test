@@ -2980,30 +2980,99 @@ function closeComparisonModal() {
 }
 
 async function exportAbsentList() {
-    if (absentList.length === 0) return showToast("Không có ai vắng để xuất!", "info");
+    if (masterData.length === 0) return showToast("Vui lòng đối soát trước!", "info");
+
+    showToast("Đang tạo báo cáo tổng hợp...", "info");
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Vắng mặt');
+    const worksheet = workbook.addWorksheet('Báo cáo đối soát');
 
-    // Header cho file mới
-    const headers = masterData[0];
-    worksheet.addRow(["DANH SÁCH VẮNG MẶT - " + currentSession.title.toUpperCase()]);
-    worksheet.addRow(["Ngày xuất: " + new Date().toLocaleString()]);
-    worksheet.addRow([]);
+    // 1. Lấy dữ liệu Có mặt hiện tại từ Firebase/Bảng báo cáo
+    const presentLogs = [];
+    const snapshot = await rdb.ref('dynamic_attendance/logs/' + currentSession.code).once('value');
+    if (snapshot.exists()) {
+        Object.values(snapshot.val()).forEach(log => presentLogs.push(log));
+    }
+
+    const totalCols = Math.max(currentSession.fields.length + 2, masterData[0].length + 1);
+
+    // 2. CẤU TRÚC FILE EXCEL
+    // --- TIÊU ĐỀ CHÍNH ---
+    worksheet.mergeCells(1, 1, 1, totalCols);
+    const mainTitle = worksheet.getCell(1, 1);
+    mainTitle.value = "BÁO CÁO TỔNG HỢP ĐIỂM DANH & ĐỐI SOÁT VẮNG";
+    mainTitle.font = { name: 'Times New Roman', size: 18, bold: true };
+    mainTitle.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    worksheet.mergeCells(2, 1, 2, totalCols);
+    const subTitle = worksheet.getCell(2, 1);
+    subTitle.value = "Sự kiện: " + currentSession.title.toUpperCase();
+    subTitle.font = { name: 'Times New Roman', size: 14, bold: true, italic: true };
+    subTitle.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // --- PHẦN 1: DANH SÁCH CÓ MẶT (Màu Xanh) ---
+    let currentRow = 4;
+    worksheet.mergeCells(currentRow, 1, currentRow, totalCols);
+    const presentTitle = worksheet.getCell(currentRow, 1);
+    presentTitle.value = `I. DANH SÁCH THÀNH VIÊN CÓ MẶT (${presentLogs.length} người)`;
+    presentTitle.font = { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF10B981' } };
     
-    const headRow = worksheet.addRow(["STT", ...headers]);
-    headRow.eachCell(c => {
-        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE11D48' } };
-        c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    currentRow++;
+    const headPresent = worksheet.addRow(["STT", "Dấu thời gian", ...currentSession.fields]);
+    headPresent.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
+        cell.font = { name: 'Times New Roman', bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+    });
+
+    presentLogs.forEach((log, index) => {
+        const row = worksheet.addRow([index + 1, log.time, ...log.values]);
+        row.eachCell(cell => {
+            cell.font = { name: 'Times New Roman' };
+            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+        });
+    });
+
+    // Khoảng cách giữa 2 bảng
+    currentRow = worksheet.lastRow.number + 3;
+
+    // --- PHẦN 2: DANH SÁCH VẮNG MẶT (Màu Đỏ) ---
+    worksheet.mergeCells(currentRow, 1, currentRow, totalCols);
+    const absentTitle = worksheet.getCell(currentRow, 1);
+    absentTitle.value = `II. DANH SÁCH THÀNH VIÊN VẮNG MẶT (${absentList.length} người)`;
+    absentTitle.font = { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FFE11D48' } };
+
+    currentRow++;
+    const masterHeaders = masterData[0]; // Tiêu đề từ file Excel tổng
+    const headAbsent = worksheet.addRow(["STT", ...masterHeaders]);
+    headAbsent.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE11D48' } };
+        cell.font = { name: 'Times New Roman', bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
     });
 
     absentList.forEach((row, index) => {
-        worksheet.addRow([index + 1, ...row]);
+        const r = worksheet.addRow([index + 1, ...row]);
+        r.eachCell(cell => {
+            cell.font = { name: 'Times New Roman' };
+            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+        });
     });
 
+    // --- FOOTER ---
+    const footerRow = worksheet.addRow([]);
+    worksheet.addRow([`Báo cáo được xuất tự động từ hệ thống S-CHECK Pro vào lúc ${new Date().toLocaleString()}`]);
+    worksheet.lastRow.font = { name: 'Times New Roman', italic: true, color: { argb: 'FF7F7F7F' } };
+
+    // Tự động dãn cột
+    worksheet.columns.forEach(column => {
+        column.width = 20;
+    });
+
+    // Xuất file
     const buffer = await workbook.xlsx.writeBuffer();
-    saveAs(new Blob([buffer]), `DS_Vang_${currentSession.code}.xlsx`);
-    showToast("Đã tải xuống danh sách vắng!", "success");
+    saveAs(new Blob([buffer]), `Bao_Cao_Tong_Hop_${currentSession.code}.xlsx`);
+    showToast("Đã tải báo cáo tổng hợp!", "success");
 }
 
 </script>

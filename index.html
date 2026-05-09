@@ -3121,7 +3121,7 @@ async function exportAbsentList() {
 
         // Tải file
         const buffer = await workbook.xlsx.writeBuffer();
-        saveAs(new Blob([buffer]), `Báo Cáo Đối Soát ${currentSession.title}.xlsx`);
+        saveAs(new Blob([buffer]), `Báo Cáo Đối Soát Vắng ${currentSession.title}.xlsx`);
         showToast("Xuất báo cáo thành công!", "success");
 
     } catch (e) {

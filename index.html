@@ -3097,25 +3097,56 @@ async function exportAbsentList() {
         // Tính toán vị trí cho bảng tiếp theo (Cách 3 dòng sau bảng trên)
         currentRow += (presentRows.length > 0 ? presentRows.length : 1) + 3;
 
-        // --- PHẦN II: DANH SÁCH VẮNG MẶT ---
+        // --- PHẦN II: DANH SÁCH VẮNG MẶT (MÀU HỒNG) ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);
         const title2 = worksheet.getCell(currentRow, 1);
         title2.value = "➤ DANH SÁCH THÀNH VIÊN VẮNG MẶT (CHƯA ĐIỂM DANH)";
-        title2.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFE11D48' } };
-        
-        // SỬA TẠI ĐÂY: horizontal chuyển thành 'left'
+        title2.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFFF1493' } }; // Màu hồng đậm (DeepPink)
         title2.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        
+        const absentHeaderRowIndex = currentRow + 1; // Lưu lại hàng tiêu đề của bảng
         currentRow++;
 
         const absentRowsData = absentList.map((data, i) => [i + 1, ...data]);
+        
+        // Thêm bảng với theme None để chúng ta tự đổ màu hồng
         worksheet.addTable({
             name: 'TableAbsent',
             ref: `A${currentRow}`,
             headerRow: true,
-            style: { theme: 'TableStyleMedium5', showRowStripes: true },
+            style: { theme: 'TableStyleNone', showRowStripes: false }, 
             columns: absentHeaders.map(h => ({ name: h, filterButton: true })),
             rows: absentRowsData.length > 0 ? absentRowsData : [new Array(absentHeaders.length).fill("")]
         });
+
+        // 1. Đổ màu hồng cho Header của bảng vắng
+        const absHeaderRow = worksheet.getRow(absentHeaderRowIndex);
+        absHeaderRow.eachCell((cell) => {
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFFF85A1' } // Màu hồng vừa phải, chuyên nghiệp
+            };
+            cell.font = { name: 'Times New Roman', bold: true, color: { argb: 'FFFFFFFF' } }; // Chữ trắng
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        // 2. Đổ màu hồng nhạt xen kẽ cho các dòng dữ liệu (Stripes)
+        absentRowsData.forEach((row, i) => {
+            const rowNum = absentHeaderRowIndex + 1 + i;
+            const rowObj = worksheet.getRow(rowNum);
+            if (i % 2 === 1) { // Các dòng xen kẽ
+                rowObj.eachCell((cell) => {
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FFFFF0F2' } // Màu hồng pastel cực nhạt
+                    };
+                });
+            }
+        });
+
+        currentRow += (absentRowsData.length > 0 ? absentRowsData.length : 1) + 1;
 
         // 1. Cấu hình độ rộng và căn giữa mặc định cho toàn bộ cột
         worksheet.columns.forEach((col, i) => {

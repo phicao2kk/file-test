@@ -2983,7 +2983,7 @@ async function exportAbsentList() {
         worksheet.mergeCells(1, 1, 1, maxCols);
         const t1 = worksheet.getCell(1, 1);
         t1.value = "S-CHECK PRO - BÁO CÁO ĐỐI SOÁT TỔNG HỢP";
-        t1.font = { name: 'Times New Roman', size: 22, bold: true, color: { argb: 'FFFFFFFF' } };
+        t1.font = { name: 'Times New Roman', size: 17, bold: true, color: { argb: 'FFFFFFFF' } };
         t1.alignment = { vertical: 'middle', horizontal: 'center' };
         worksheet.getRow(1).height = 40;
 
@@ -2991,7 +2991,7 @@ async function exportAbsentList() {
         worksheet.mergeCells(2, 1, 2, maxCols);
         const t2 = worksheet.getCell(2, 1);
         t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()} | TRẠNG THÁI: CÓ MẶT (${presentLogs.length}) - VẮNG (${absentList.length})`;
-        t2.font = { name: 'Times New Roman', size: 14, bold: true, italic: true, color: { argb: 'FF334155' } };
+        t2.font = { name: 'Times New Roman', size: 13, bold: true, italic: true, color: { argb: 'FF334155' } };
         t2.alignment = { vertical: 'middle', horizontal: 'center' };
         worksheet.getRow(2).height = 25;
 

@@ -2979,19 +2979,19 @@ async function exportAbsentList() {
         // Khóa các dòng tiêu đề (Dòng 1, 2, 3)
         worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
 
-        // --- DÒNG 1: TIÊU ĐỀ CHÍNH (CỠ 22) ---
+        // --- DÒNG 1: TIÊU ĐỀ CHÍNH (Chữ Đen, Cỡ 18) ---
         worksheet.mergeCells(1, 1, 1, maxCols);
         const t1 = worksheet.getCell(1, 1);
         t1.value = "S-CHECK PRO - BÁO CÁO ĐỐI SOÁT TỔNG HỢP";
-        t1.font = { name: 'Times New Roman', size: 17, bold: true, color: { argb: 'FFFFFFFF' } };
+        t1.font = { name: 'Times New Roman', size: 18, bold: true, color: { argb: 'FF000000' } }; // Đổi sang màu đen
         t1.alignment = { vertical: 'middle', horizontal: 'center' };
-        worksheet.getRow(1).height = 40;
+        worksheet.getRow(1).height = 35;
 
-        // --- DÒNG 2: THÔNG TIN SỰ KIỆN (CỠ 14) ---
+        // --- DÒNG 2: THÔNG TIN SỰ KIỆN ---
         worksheet.mergeCells(2, 1, 2, maxCols);
         const t2 = worksheet.getCell(2, 1);
         t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()} | TRẠNG THÁI: CÓ MẶT (${presentLogs.length}) - VẮNG (${absentList.length})`;
-        t2.font = { name: 'Times New Roman', size: 13, bold: true, italic: true, color: { argb: 'FF334155' } };
+        t2.font = { name: 'Times New Roman', size: 13, bold: true, italic: true, color: { argb: 'FF475569' } };
         t2.alignment = { vertical: 'middle', horizontal: 'center' };
         worksheet.getRow(2).height = 25;
 
@@ -3002,6 +3002,7 @@ async function exportAbsentList() {
         const title1 = worksheet.getCell(currentRow, 1);
         title1.value = "➤ DANH SÁCH THÀNH VIÊN THAM GIA (ĐÃ ĐIỂM DANH)";
         title1.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FF3F51B5' } };
+        title1.alignment = { vertical: 'middle', horizontal: 'left' }; // Căn trái tuyệt đối
         currentRow++; 
 
         const presentRows = presentLogs.map((log, i) => [i + 1, log.time, ...log.values]);
@@ -3022,6 +3023,7 @@ async function exportAbsentList() {
         const title2 = worksheet.getCell(currentRow, 1);
         title2.value = "➤ DANH SÁCH THÀNH VIÊN VẮNG MẶT (CHƯA ĐIỂM DANH)";
         title2.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFE11D48' } };
+        title2.alignment = { vertical: 'middle', horizontal: 'left' }; // Căn trái tuyệt đối
         currentRow++;
 
         const absentRowsData = absentList.map((data, i) => [i + 1, ...data]);
@@ -3034,11 +3036,26 @@ async function exportAbsentList() {
             rows: absentRowsData.length > 0 ? absentRowsData : [new Array(absentHeaders.length).fill("")]
         });
 
-        // Căn chỉnh độ rộng cột và Font mặc định cho dữ liệu
+        // --- CĂN CHỈNH ĐỘ RỘNG CỘT & FONT DỮ LIỆU ---
         worksheet.columns.forEach((col, i) => {
             col.width = i === 0 ? 8 : 25;
-            col.alignment = { vertical: 'middle', horizontal: 'center' };
+            col.font = { name: 'Times New Roman', size: 11 };
         });
+
+        // Áp dụng căn giữa cho toàn bộ ô dữ liệu trong bảng (trừ tiêu đề lề trái đã set)
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber > 3) {
+                row.eachCell((cell) => {
+                    if (!cell.isMerged || rowNumber % 1 !== 0) { // Không can thiệp vào các dòng tiêu đề đã merge lề trái
+                        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                    }
+                });
+            }
+        });
+
+        // Fix lại căn lề trái cho 2 dòng tiêu đề mục sau khi loop format
+        title1.alignment = { vertical: 'middle', horizontal: 'left' };
+        title2.alignment = { vertical: 'middle', horizontal: 'left' };
 
         const buffer = await workbook.xlsx.writeBuffer();
         saveAs(new Blob([buffer]), `Bao_Cao_Doi_Soat_${currentSession.code}.xlsx`);

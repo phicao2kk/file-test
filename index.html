@@ -3006,7 +3006,7 @@ function closeComparisonModal() {
     }
 }
 
-// 2. Xuất Báo cáo Tổng hợp (Có mặt + Vắng mặt)
+// 2. Xuất Báo cáo Tổng hợp (ÉP PHÔNG TIMES NEW ROMAN & CĂN GIỮA TOÀN BỘ)
 async function exportAbsentList() {
     if (masterData.length === 0) return showToast("Dữ liệu trống!", "error");
 
@@ -3041,8 +3041,9 @@ async function exportAbsentList() {
         t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()}`;
         t2.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF334155' } };
         t2.alignment = { vertical: 'middle', horizontal: 'center' };
+        worksheet.getRow(2).height = 25;
 
-        // --- DÒNG 3: TRẠNG THÁI (Đã sửa màu đỏ chuẩn) ---
+        // --- DÒNG 3: TRẠNG THÁI ---
         worksheet.mergeCells(3, 1, 3, maxCols);
         const t3 = worksheet.getCell(3, 1);
         t3.value = {
@@ -3056,18 +3057,18 @@ async function exportAbsentList() {
         t3.alignment = { vertical: 'middle', horizontal: 'center' };
         worksheet.getRow(3).height = 25;
 
-        let currentRow = 5; // Bắt đầu danh sách từ dòng 5
+        let currentRow = 5;
 
         // --- PHẦN I: DANH SÁCH THÀNH VIÊN THAM GIA ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);
-        const title1 = worksheet.getCell(currentRow, 1);
-        title1.value = "➤ DANH SÁCH THÀNH VIÊN THAM GIA (ĐÃ ĐIỂM DANH)";
-        title1.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FF3F51B5' } };
-        title1.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        const sec1 = worksheet.getCell(currentRow, 1);
+        sec1.value = "➤ DANH SÁCH THÀNH VIÊN THAM GIA (ĐÃ ĐIỂM DANH)";
+        sec1.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FF3F51B5' } };
+        sec1.alignment = { vertical: 'middle', horizontal: 'center' }; // Căn giữa tiêu đề mục
         currentRow++;
 
         const presentRows = presentLogs.map((log, i) => [i + 1, log.time, ...log.values]);
-        worksheet.addTable({
+        const table1 = worksheet.addTable({
             name: 'TablePresent',
             ref: `A${currentRow}`,
             headerRow: true,
@@ -3076,21 +3077,28 @@ async function exportAbsentList() {
             rows: presentRows.length > 0 ? presentRows : [new Array(attendeeFields.length).fill("")]
         });
 
-        // Tính toán lại hàng hiện tại sau bảng 1
-        currentRow += (presentRows.length > 0 ? presentRows.length : 1) + 3;
+        // Ép phông và căn giữa cho Bảng 1
+        const lastRow1 = currentRow + presentRows.length;
+        for (let r = currentRow; r <= lastRow1; r++) {
+            const row = worksheet.getRow(r);
+            row.eachCell({ includeEmpty: true }, (cell) => {
+                cell.font = { name: 'Times New Roman', size: 11 };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            });
+        }
 
-        // --- PHẦN II: DANH SÁCH VẮNG MẶT (CHUYỂN SANG MÀU ĐỎ) ---
+        currentRow = lastRow1 + 3;
+
+        // --- PHẦN II: DANH SÁCH VẮNG MẶT (MÀU ĐỎ) ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);
-        const title2 = worksheet.getCell(currentRow, 1);
-        title2.value = "➤ DANH SÁCH THÀNH VIÊN VẮNG MẶT (CHƯA ĐIỂM DANH)";
-        title2.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFE11D48' } };
-        title2.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-        
-        const absentHeaderRowIndex = currentRow + 1;
+        const sec2 = worksheet.getCell(currentRow, 1);
+        sec2.value = "➤ DANH SÁCH THÀNH VIÊN VẮNG MẶT (CHƯA ĐIỂM DANH)";
+        sec2.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFE11D48' } };
+        sec2.alignment = { vertical: 'middle', horizontal: 'center' }; // Căn giữa tiêu đề mục
         currentRow++;
 
         const absentRowsData = absentList.map((data, i) => [i + 1, ...data]);
-        worksheet.addTable({
+        const table2 = worksheet.addTable({
             name: 'TableAbsent',
             ref: `A${currentRow}`,
             headerRow: true,
@@ -3099,47 +3107,41 @@ async function exportAbsentList() {
             rows: absentRowsData.length > 0 ? absentRowsData : [new Array(absentHeaders.length).fill("")]
         });
 
-        // 1. Đổ màu đỏ cho Header bảng vắng
-        const absHeaderRow = worksheet.getRow(absentHeaderRowIndex);
-        absHeaderRow.eachCell((cell) => {
+        // Định dạng Header và Body cho Bảng 2 (Bảng Đỏ)
+        const headerRow2 = worksheet.getRow(currentRow);
+        headerRow2.eachCell((cell) => {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE11D48' } };
             cell.font = { name: 'Times New Roman', bold: true, color: { argb: 'FFFFFFFF' } };
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
             cell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
         });
 
-        // 2. Định dạng màu và kẻ viền cho dữ liệu bảng vắng
-        absentRowsData.forEach((row, i) => {
-            const rowNum = absentHeaderRowIndex + 1 + i;
-            const rowObj = worksheet.getRow(rowNum);
-            rowObj.eachCell((cell) => {
+        const lastRow2 = currentRow + absentRowsData.length;
+        for (let r = currentRow + 1; r <= lastRow2; r++) {
+            const row = worksheet.getRow(r);
+            const isAlt = (r - currentRow) % 2 === 0;
+            row.eachCell({ includeEmpty: true }, (cell) => {
                 cell.font = { name: 'Times New Roman', size: 11 };
                 cell.alignment = { vertical: 'middle', horizontal: 'center' };
                 cell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
-                // Dòng xen kẽ màu đỏ nhạt
-                if (i % 2 === 1) {
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1F2' } };
-                }
+                if (isAlt) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1F2' } };
             });
-        });
+        }
 
-        // Cập nhật vị trí cuối cùng để đặt Footer
-        const finalDataRow = absentHeaderRowIndex + (absentRowsData.length > 0 ? absentRowsData.length : 1);
-        const footerRowIndex = finalDataRow + 2;
-
-        // --- DÒNG GHI CHÚ CHÂN TRANG (FIXED) ---
+        // --- DÒNG GHI CHÚ CHÂN TRANG (FOOTER) ---
+        const footerRowIndex = lastRow2 + 2;
         worksheet.mergeCells(footerRowIndex, 1, footerRowIndex, maxCols);
         const footerCell = worksheet.getCell(footerRowIndex, 1);
         footerCell.value = `Báo cáo được xuất từ hệ thống S-CHECK Pro vào lúc ${new Date().toLocaleString('vi-VN')}`;
         footerCell.font = { name: 'Times New Roman', italic: true, size: 10, color: { argb: 'FF7F7F7F' } };
-        footerCell.alignment = { horizontal: 'right', vertical: 'middle' };
+        footerCell.alignment = { vertical: 'middle', horizontal: 'center' }; // Cho footer vô giữa luôn theo ý bạn
 
-        // Căn chỉnh độ rộng cột
+        // Độ rộng cột
         worksheet.columns.forEach((col, i) => {
-            col.width = i === 0 ? 8 : 25;
+            col.width = i === 0 ? 8 : 28;
         });
 
-        // Xuất file
+        // Tải file
         const buffer = await workbook.xlsx.writeBuffer();
         saveAs(new Blob([buffer]), `Báo Cáo Đối Soát ${currentSession.title}.xlsx`);
         showToast("Xuất báo cáo thành công!", "success");

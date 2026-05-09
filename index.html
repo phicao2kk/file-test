@@ -2958,6 +2958,15 @@ async function handleFileSelected(input) {
     reader.readAsArrayBuffer(file);
 }
 
+// Hàm để đóng Modal kết quả đối soát
+function closeComparisonModal() {
+    const modal = document.getElementById('compare-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
+
 // 2. Xuất Báo cáo Tổng hợp (Có mặt + Vắng mặt) - CÓ BỘ LỌC RIÊNG CHO TỪNG BẢNG
 async function exportAbsentList() {
     if (masterData.length === 0) return showToast("Dữ liệu trống!", "error");

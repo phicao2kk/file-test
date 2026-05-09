@@ -2962,7 +2962,7 @@ async function handleFileSelected(input) {
 async function exportAbsentList() {
     if (masterData.length === 0) return showToast("Dữ liệu trống!", "error");
 
-    showToast("Đang tạo báo cáo đối soát thông minh...", "info");
+    showToast("Đang tạo báo cáo đối soát chuyên sâu...", "info");
 
     try {
         const snapshot = await rdb.ref('dynamic_attendance/logs/' + currentSession.code).once('value');
@@ -2974,93 +2974,79 @@ async function exportAbsentList() {
         const attendeeFields = ["STT", "Dấu thời gian", ...currentSession.fields];
         const masterHeadersRaw = masterData[0] || [];
         const absentHeaders = ["STT", ...masterHeadersRaw];
-        
         const maxCols = Math.max(attendeeFields.length, absentHeaders.length);
 
-        // Cấu hình xem: Khóa dòng 1, 2, 3
+        // Khóa các dòng tiêu đề (Dòng 1, 2, 3)
         worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
 
-        // TIÊU ĐỀ HỆ THỐNG
+        // --- DÒNG 1: TIÊU ĐỀ CHÍNH (CỠ 22) ---
         worksheet.mergeCells(1, 1, 1, maxCols);
         const t1 = worksheet.getCell(1, 1);
         t1.value = "S-CHECK PRO - BÁO CÁO ĐỐI SOÁT TỔNG HỢP";
-        t1.font = { name: 'Times New Roman', size: 16, bold: true };
+        t1.font = { name: 'Times New Roman', size: 22, bold: true, color: { argb: 'FFFFFFFF' } };
         t1.alignment = { vertical: 'middle', horizontal: 'center' };
+        worksheet.getRow(1).height = 40;
 
+        // --- DÒNG 2: THÔNG TIN SỰ KIỆN (CỠ 14) ---
         worksheet.mergeCells(2, 1, 2, maxCols);
         const t2 = worksheet.getCell(2, 1);
-        t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()} (CÓ MẶT: ${presentLogs.length} | VẮNG: ${absentList.length})`;
-        t2.font = { name: 'Times New Roman', size: 12, bold: true, italic: true };
+        t2.value = `SỰ KIỆN: ${currentSession.title.toUpperCase()} | TRẠNG THÁI: CÓ MẶT (${presentLogs.length}) - VẮNG (${absentList.length})`;
+        t2.font = { name: 'Times New Roman', size: 14, bold: true, italic: true, color: { argb: 'FF334155' } };
         t2.alignment = { vertical: 'middle', horizontal: 'center' };
+        worksheet.getRow(2).height = 25;
 
-        // --- PHẦN I: DANH SÁCH CÓ MẶT ---
         let currentRow = 4;
-        
-        // Dòng tiêu đề bảng 1
+
+        // --- PHẦN I: DANH SÁCH THÀNH VIÊN THAM GIA ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);
-        const titlePresent = worksheet.getCell(currentRow, 1);
-        titlePresent.value = "DANH SÁCH THÀNH VIÊN THAM GIA (ĐÃ ĐIỂM DANH)";
-        titlePresent.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FF3F51B5' } };
-        titlePresent.alignment = { horizontal: 'left' };
-        
-        currentRow++; // Hàng 5: Bắt đầu bảng 1 (Header)
+        const title1 = worksheet.getCell(currentRow, 1);
+        title1.value = "➤ DANH SÁCH THÀNH VIÊN THAM GIA (ĐÃ ĐIỂM DANH)";
+        title1.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FF3F51B5' } };
+        currentRow++; 
 
-        // Tạo dữ liệu cho bảng Có mặt
         const presentRows = presentLogs.map((log, i) => [i + 1, log.time, ...log.values]);
-
-        // Thêm bảng (Excel Table) để có bộ lọc riêng
         worksheet.addTable({
             name: 'TablePresent',
             ref: `A${currentRow}`,
             headerRow: true,
-            totalsRow: false,
-            style: { theme: 'TableStyleMedium9', showRowStripes: true }, // Style màu xanh Indigo/Tím
+            style: { theme: 'TableStyleMedium9', showRowStripes: true },
             columns: attendeeFields.map(f => ({ name: f, filterButton: true })),
             rows: presentRows.length > 0 ? presentRows : [new Array(attendeeFields.length).fill("")]
         });
 
-        // Tính toán vị trí tiếp theo (Dòng cuối bảng 1 + 3 dòng trống)
+        // Tính toán vị trí cho bảng tiếp theo (Cách 3 dòng)
         currentRow += (presentRows.length > 0 ? presentRows.length : 1) + 3;
 
-        // --- PHẦN II: DANH SÁCH VẮNG ---
-        
-        // Dòng tiêu đề bảng 2
+        // --- PHẦN II: DANH SÁCH VẮNG MẶT ---
         worksheet.mergeCells(currentRow, 1, currentRow, maxCols);
-        const titleAbsent = worksheet.getCell(currentRow, 1);
-        titleAbsent.value = "DANH SÁCH THÀNH VIÊN VẮNG MẶT (CHƯA CÓ DỮ LIỆU)";
-        titleAbsent.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFE11D48' } };
-        titleAbsent.alignment = { horizontal: 'left' };
+        const title2 = worksheet.getCell(currentRow, 1);
+        title2.value = "➤ DANH SÁCH THÀNH VIÊN VẮNG MẶT (CHƯA ĐIỂM DANH)";
+        title2.font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FFE11D48' } };
+        currentRow++;
 
-        currentRow++; // Hàng tiếp theo: Bắt đầu bảng 2 (Header)
-
-        // Tạo dữ liệu cho bảng Vắng
         const absentRowsData = absentList.map((data, i) => [i + 1, ...data]);
-
         worksheet.addTable({
             name: 'TableAbsent',
             ref: `A${currentRow}`,
             headerRow: true,
-            totalsRow: false,
-            style: { theme: 'TableStyleMedium5', showRowStripes: true }, // Style màu đỏ/cam
+            style: { theme: 'TableStyleMedium5', showRowStripes: true },
             columns: absentHeaders.map(h => ({ name: h, filterButton: true })),
             rows: absentRowsData.length > 0 ? absentRowsData : [new Array(absentHeaders.length).fill("")]
         });
 
-        // --- ĐỊNH DẠNG CHUNG ---
-        worksheet.columns.forEach(col => {
-            col.width = 25;
-            col.font = { name: 'Times New Roman' };
+        // Căn chỉnh độ rộng cột và Font mặc định cho dữ liệu
+        worksheet.columns.forEach((col, i) => {
+            col.width = i === 0 ? 8 : 25;
+            col.alignment = { vertical: 'middle', horizontal: 'center' };
         });
-        worksheet.getColumn(1).width = 8; // Cột STT
 
-        // Xuất file
         const buffer = await workbook.xlsx.writeBuffer();
-        saveAs(new Blob([buffer]), `Bao_Cao_Tong_Hop_${currentSession.code}.xlsx`);
-        showToast("Đã tải báo cáo với 2 bộ lọc riêng biệt!", "success");
+        saveAs(new Blob([buffer]), `Bao_Cao_Doi_Soat_${currentSession.code}.xlsx`);
+        showToast("Xuất báo cáo thành công!", "success");
 
     } catch (e) {
         console.error(e);
-        showToast("Lỗi khi tạo bảng đối soát!", "error");
+        showToast("Lỗi khi tạo file báo cáo!", "error");
     }
 }
 

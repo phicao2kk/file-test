@@ -1229,97 +1229,22 @@ async function submitAttendance() {
     const vals = Array.from(document.querySelectorAll('.u-input')).map(i => i.value.trim());
     if(vals.some(v => !v)) return showToast("Vui lòng điền đủ thông tin!", "info");
     
-    // Lấy Fingerprint nâng cao
-    const fingerprint = await getUniqueDeviceId();
-    const time = new Date().toLocaleString('vi-VN');
+    // Lấy ID duy nhất của máy này
+    const deviceId = getUniqueDeviceId(); 
 
-    // --- KIỂM TRA TRÙNG LẶP BẰNG FINGERPRINT ---
-    if (!userSession.allowMultiple) {
-        showToast("Đang xác thực thiết bị...", "info");
-        try {
-            const checkRef = rdb.ref('dynamic_attendance/logs/' + userSession.code);
-            const snapshot = await checkRef.once('value');
-            
-            let found = false;
-            let existingLog = null;
-            
-            if (snapshot.exists()) {
-                const logs = snapshot.val();
-                for (const [logId, log] of Object.entries(logs)) {
-                    // So sánh fingerprint thay vì deviceId
-                    if (log.fingerprint === fingerprint) {
-                        found = true;
-                        existingLog = log;
-                        break;
-                    }
-                }
-            }
-            
-            if (found) {
-                showToast(`⚠️ Thiết bị này đã điểm danh lúc ${existingLog.time}`, "error");
-                return;
-            }
-            
-        } catch (e) { 
-            console.error(e);
-        }
-    }
-
-    // --- KIỂM TRA GPS ---
-    if (userSession && userSession.requireLocation === true) {
-        showToast("Đang xác thực phạm vi hiện diện...", "info");
-        try {
-            const pos = await new Promise((res, rej) => 
-                navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 7000 })
-            );
-            
-            if (userSession.adminLocation) {
-                const dist = getDistance(
-                    pos.coords.latitude, pos.coords.longitude,
-                    userSession.adminLocation.lat, userSession.adminLocation.lng
-                );
-                const allowedRadius = Number(userSession.locationRadius) || 50;
-                if (dist > allowedRadius) {
-                    return showToast(`Không thành công! Bạn ở cách xa ${dist.toFixed(0)}m.`, "error");
-                }
-            }
-        } catch (e) {
-            return showToast(getGpsErrorMessage(e), "error");
-        }
-    }
-
-    // --- GỬI DỮ LIỆU VỚI FINGERPRINT ---
+// --- KIỂM TRA TRÙNG LẶP (CHỈ KHI KHÔNG BẬT TEST MODE) ---
+if (!userSession.allowMultiple) {
+    showToast("Đang kiểm tra dữ liệu thiết bị...", "info");
     try {
-        await rdb.ref('dynamic_attendance/logs/' + userSession.code).push({ 
-            values: vals, 
-            time: time, 
-            ts: Date.now(),
-            fingerprint: fingerprint,        // Lưu fingerprint thay vì deviceId
-            userAgent: navigator.userAgent   // Thêm User Agent để kiểm tra chéo
-        });
-        
-        document.getElementById('success-overlay').style.display = 'flex';
-        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-        
-        // Tự động ẩn sau 3 giây
-        setTimeout(() => {
-            document.getElementById('success-overlay').style.display = 'none';
-        }, 3000);
-        
-    } catch (e) {
-        showToast("Lỗi hệ thống: Không thể gửi dữ liệu!", "error");
-        console.error(e);
-    }
+        const checkRef = rdb.ref('dynamic_attendance/logs/' + userSession.code);
+        const snapshot = await checkRef.orderByChild('deviceId').equalTo(deviceId).once('value');
+        if (snapshot.exists()) {
+            return showToast("BẠN ĐÃ ĐIỂM DANH SỰ KIỆN NÀY RỒI!", "error");
+        }
+    } catch (e) { console.error(e); }
+} else {
+    console.log("Chế độ test (cho phép nhiều lượt): bỏ qua kiểm tra trùng lặp");
 }
-
-// Khi lưu log, thêm fingerprint thay vì deviceId cũ
-await rdb.ref('dynamic_attendance/logs/' + userSession.code).push({ 
-    values: vals, 
-    time: time, 
-    ts: Date.now(),
-    fingerprint: deviceId,  // Thay deviceId bằng fingerprint
-    userAgent: navigator.userAgent  // Thêm User Agent để kiểm tra chéo
-});
 
     // --- BƯỚC 2: KIỂM TRA GPS (CHỈ KHI ADMIN BẬT) ---
     if (userSession && userSession.requireLocation === true) {
@@ -3170,282 +3095,29 @@ function getGpsErrorMessage(err) {
 }
 
 // Hàm lấy hoặc tạo mã định danh thiết bị (Device ID)
-// HÀM TẠO FINGERPRINT NÂNG CAO (Canvas + WebGL + Audio + Battery)
-async function getUniqueDeviceId() {
-    // Kiểm tra xem đã có trong sessionStorage chưa (tránh tính lại nhiều lần trong cùng phiên)
-    if (sessionStorage.getItem('scheck_advanced_fingerprint')) {
-        return sessionStorage.getItem('scheck_advanced_fingerprint');
+function getUniqueDeviceId() {
+    // 1. Lấy thông tin đặc trưng của máy (ít thay đổi giữa các trình duyệt)
+    const screenRes = `${window.screen.width}x${window.screen.height}`;
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const touchPoints = navigator.maxTouchPoints || 0;
+    const cores = navigator.hardwareConcurrency || 0; // Số nhân CPU
+    
+    // 2. Tạo chuỗi thô
+    const rawFingerprint = `scheck-${screenRes}-${timezone}-${touchPoints}-${cores}`;
+    
+    // 3. Hàm băm đơn giản (Hash) để tạo chuỗi ngắn gọn
+    let hash = 0;
+    for (let i = 0; i < rawFingerprint.length; i++) {
+        const char = rawFingerprint.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; 
     }
-    
-    const components = {};
-    
-    // 1. User Agent và Platform
-    components.ua = navigator.userAgent;
-    components.platform = navigator.platform;
-    components.language = navigator.language;
-    components.languages = navigator.languages ? navigator.languages.join(',') : '';
-    
-    // 2. Màn hình và màu sắc
-    components.screen = `${screen.width}x${screen.height}x${screen.colorDepth}`;
-    components.availScreen = `${screen.availWidth}x${screen.availHeight}`;
-    components.devicePixelRatio = devicePixelRatio;
-    
-    // 3. Múi giờ và ngôn ngữ
-    components.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    components.timezoneOffset = new Date().getTimezoneOffset();
-    
-    // 4. Canvas Fingerprinting (Quan trọng nhất)
-    components.canvas = await getCanvasFingerprint();
-    
-    // 5. WebGL Fingerprinting (GPU - rất khó giả mạo)
-    components.webgl = await getWebGLFingerprint();
-    
-    // 6. Audio Fingerprinting (Tùy chọn - tăng độ chính xác)
-    components.audio = await getAudioFingerprint();
-    
-    // 7. Font chữ hệ thống
-    components.fonts = await getFontFingerprint();
-    
-    // 8. Plugins trình duyệt
-    components.plugins = getPluginsFingerprint();
-    
-    // 9. Touch support
-    components.touchSupport = 'ontouchstart' in window;
-    
-    // 10. WebRTC (IP local - có thể bị che giấu nhưng vẫn hữu ích)
-    components.webRTC = await getWebRTCFingerprint();
-    
-    // Tạo chuỗi hash từ tất cả components
-    const fingerprintString = JSON.stringify(components);
-    const hash = await sha256(fingerprintString);
-    
-    // Lưu vào localStorage và sessionStorage
-    const finalId = `fp_${hash.substring(0, 32)}`;
-    localStorage.setItem('scheck_advanced_fingerprint', finalId);
-    sessionStorage.setItem('scheck_advanced_fingerprint', finalId);
+    const finalId = 'ID-' + Math.abs(hash).toString(16);
+
+    // Vẫn lưu vào localStorage để dùng nhanh, nhưng tính toán lại mỗi lần để đối chiếu
+    localStorage.setItem('scheck_device_fingerprint', finalId);
     
     return finalId;
-}
-
-// === CÁC HÀM HỖ TRỢ ===
-
-// 1. Canvas Fingerprint
-async function getCanvasFingerprint() {
-    return new Promise((resolve) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 200;
-        canvas.height = 50;
-        const ctx = canvas.getContext('2d');
-        
-        // Vẽ các hình dạng phức tạp
-        ctx.textBaseline = "top";
-        ctx.font = "14px 'Arial'";
-        ctx.fillStyle = "#f60";
-        ctx.fillRect(125, 1, 62, 20);
-        
-        ctx.fillStyle = "#069";
-        ctx.fillText("S-CHECK Pro 2026", 2, 15);
-        
-        ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
-        ctx.font = "18px 'Georgia'";
-        ctx.fillText("Fingerprint", 4, 35);
-        
-        // Vẽ đường cong Bezier
-        ctx.beginPath();
-        ctx.moveTo(10, 45);
-        ctx.bezierCurveTo(50, 30, 90, 60, 130, 40);
-        ctx.stroke();
-        
-        // Vẽ hình tròn với gradient
-        const gradient = ctx.createLinearGradient(150, 10, 190, 40);
-        gradient.addColorStop(0, "red");
-        gradient.addColorStop(1, "blue");
-        ctx.fillStyle = gradient;
-        ctx.fillRect(150, 10, 40, 30);
-        
-        // Lấy dataURL và hash
-        const dataURL = canvas.toDataURL();
-        sha256(dataURL).then(hash => resolve(hash));
-    });
-}
-
-// 2. WebGL Fingerprint (GPU)
-async function getWebGLFingerprint() {
-    const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-    
-    if (!gl) return 'no_webgl_support';
-    
-    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-    if (!debugInfo) return 'no_debug_info';
-    
-    const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
-    const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-    
-    // Lấy thêm thông tin về shader
-    const shaderPrecision = gl.getShaderPrecisionFormat(gl.VERTEX_SHADER, gl.HIGH_FLOAT);
-    
-    const webglData = {
-        vendor: vendor,
-        renderer: renderer,
-        maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-        maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
-        maxVertexUniformVectors: gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS),
-        maxVaryingVectors: gl.getParameter(gl.MAX_VARYING_VECTORS),
-        maxFragmentUniformVectors: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
-        shaderPrecisionHigh: shaderPrecision ? shaderPrecision.precision : 0
-    };
-    
-    const fingerprint = JSON.stringify(webglData);
-    return await sha256(fingerprint);
-}
-
-// 3. Audio Fingerprinting
-async function getAudioFingerprint() {
-    return new Promise((resolve) => {
-        try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) {
-                resolve('no_audio_support');
-                return;
-            }
-            
-            const context = new AudioContext();
-            const oscillator = context.createOscillator();
-            const analyser = context.createAnalyser();
-            const gain = context.createGain();
-            const scriptProcessor = context.createScriptProcessor(4096, 1, 1);
-            
-            oscillator.type = 'triangle';
-            oscillator.frequency.value = 10000;
-            
-            gain.gain.value = 0.00001; // Rất nhỏ để không gây khó chịu
-            
-            oscillator.connect(gain);
-            gain.connect(analyser);
-            analyser.connect(scriptProcessor);
-            scriptProcessor.connect(context.destination);
-            
-            const frequencyData = new Uint8Array(analyser.frequencyBinCount);
-            
-            scriptProcessor.onaudioprocess = () => {
-                analyser.getByteFrequencyData(frequencyData);
-                const fingerprint = Array.from(frequencyData.slice(0, 50)).join(',');
-                oscillator.stop();
-                context.close();
-                sha256(fingerprint).then(resolve);
-            };
-            
-            oscillator.start();
-            
-            setTimeout(() => {
-                try {
-                    oscillator.stop();
-                    context.close();
-                } catch(e) {}
-                resolve('audio_timeout');
-            }, 1000);
-            
-        } catch(e) {
-            resolve('audio_error');
-        }
-    });
-}
-
-// 4. Font Fingerprinting
-async function getFontFingerprint() {
-    const fonts = [
-        'Arial', 'Verdana', 'Times New Roman', 'Courier New', 
-        'Georgia', 'Comic Sans MS', 'Impact', 'Tahoma', 
-        'Trebuchet MS', 'Lucida Sans Unicode', 'Roboto', 'Open Sans'
-    ];
-    
-    const baseFonts = ['monospace', 'sans-serif', 'serif'];
-    const testString = "mmmmmmmmmmlli";
-    const testSize = "72px";
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    const getWidth = (font) => {
-        ctx.font = `${testSize} ${font}`;
-        return ctx.measureText(testString).width;
-    };
-    
-    const baseWidths = {};
-    baseFonts.forEach(base => {
-        baseWidths[base] = getWidth(base);
-    });
-    
-    const detectedFonts = [];
-    fonts.forEach(font => {
-        let detected = false;
-        baseFonts.forEach(base => {
-            const width = getWidth(`${font},${base}`);
-            if (width !== baseWidths[base]) {
-                detected = true;
-            }
-        });
-        if (detected) detectedFonts.push(font);
-    });
-    
-    return await sha256(detectedFonts.join(','));
-}
-
-// 5. Plugins Fingerprint
-function getPluginsFingerprint() {
-    const plugins = [];
-    for (let i = 0; i < navigator.plugins.length; i++) {
-        const plugin = navigator.plugins[i];
-        plugins.push(plugin.name);
-    }
-    return plugins.join(',');
-}
-
-// 6. WebRTC Fingerprint (lấy IP local)
-async function getWebRTCFingerprint() {
-    return new Promise((resolve) => {
-        const ips = [];
-        const PeerConnection = window.RTCPeerConnection || 
-                              window.webkitRTCPeerConnection || 
-                              window.mozRTCPeerConnection;
-        
-        if (!PeerConnection) {
-            resolve('no_webrtc');
-            return;
-        }
-        
-        const pc = new PeerConnection({ iceServers: [] });
-        pc.createDataChannel('');
-        pc.createOffer()
-            .then(offer => pc.setLocalDescription(offer))
-            .catch(() => {});
-        
-        pc.onicecandidate = (event) => {
-            if (event && event.candidate && event.candidate.candidate) {
-                const ip = event.candidate.candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
-                if (ip && !ips.includes(ip[0])) {
-                    ips.push(ip[0]);
-                }
-            } else {
-                sha256(ips.join(',')).then(resolve);
-                pc.close();
-            }
-        };
-        
-        setTimeout(() => {
-            pc.close();
-            sha256(ips.join(',')).then(resolve);
-        }, 1000);
-    });
-}
-
-// Hàm băm SHA-256
-async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
 }
 
 // --- BIẾN TOÀN CỤC CHO ĐỐI SOÁT (thêm biến lưu nhóm) ---
@@ -4270,26 +3942,6 @@ function prepareAbsentCheck(code, title, fieldsBase64) {
         console.error("Lỗi chuẩn bị đối soát:", e);
         showToast("Lỗi xử lý dữ liệu sự kiện!", "error");
     }
-}
-
-// Kiểm tra xem có đang dùng chế độ ẩn danh không
-function isIncognitoMode() {
-    return new Promise((resolve) => {
-        const fs = window.RequestFileSystem || window.webkitRequestFileSystem;
-        if (!fs) {
-            resolve(false);
-            return;
-        }
-        fs(window.TEMPORARY, 100, () => resolve(false), () => resolve(true));
-    });
-}
-
-// Thêm vào cuối hàm getUniqueDeviceId()
-const isIncognito = await isIncognitoMode();
-if (isIncognito) {
-    // Nếu là chế độ ẩn danh, thêm random factor để giảm độ tin cậy
-    components.incognito = true;
-    components.randomFactor = Math.random();
 }
 
 </script>

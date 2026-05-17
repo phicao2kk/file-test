@@ -1229,39 +1229,85 @@ async function submitAttendance() {
     const vals = Array.from(document.querySelectorAll('.u-input')).map(i => i.value.trim());
     if(vals.some(v => !v)) return showToast("Vui lòng điền đủ thông tin!", "info");
     
-    // Lấy ID duy nhất của máy này
-    const deviceId = getUniqueDeviceId(); 
+    // Lấy Fingerprint nâng cao
+    const fingerprint = await getUniqueDeviceId();
+    const time = new Date().toLocaleString('vi-VN');
 
-// --- KIỂM TRA TRÙNG LẶP (CHỈ KHI KHÔNG BẬT TEST MODE) ---
-// Trong hàm submitAttendance(), thay thế đoạn kiểm tra cũ bằng:
-if (!userSession.allowMultiple) {
-    showToast("Đang xác thực thiết bị...", "info");
-    try {
-        const checkRef = rdb.ref('dynamic_attendance/logs/' + userSession.code);
-        const snapshot = await checkRef.once('value');
-        
-        let found = false;
-        let existingLog = null;
-        
-        if (snapshot.exists()) {
-            const logs = snapshot.val();
-            for (const [logId, log] of Object.entries(logs)) {
-                // So sánh fingerprint (đã cải tiến)
-                if (log.fingerprint === deviceId) {
-                    found = true;
-                    existingLog = log;
-                    break;
+    // --- KIỂM TRA TRÙNG LẶP BẰNG FINGERPRINT ---
+    if (!userSession.allowMultiple) {
+        showToast("Đang xác thực thiết bị...", "info");
+        try {
+            const checkRef = rdb.ref('dynamic_attendance/logs/' + userSession.code);
+            const snapshot = await checkRef.once('value');
+            
+            let found = false;
+            let existingLog = null;
+            
+            if (snapshot.exists()) {
+                const logs = snapshot.val();
+                for (const [logId, log] of Object.entries(logs)) {
+                    // So sánh fingerprint thay vì deviceId
+                    if (log.fingerprint === fingerprint) {
+                        found = true;
+                        existingLog = log;
+                        break;
+                    }
                 }
             }
+            
+            if (found) {
+                showToast(`⚠️ Thiết bị này đã điểm danh lúc ${existingLog.time}`, "error");
+                return;
+            }
+            
+        } catch (e) { 
+            console.error(e);
         }
-        
-        if (found) {
-            // Hiển thị thông báo chi tiết
-            showToast(`⚠️ Thiết bị này đã điểm danh lúc ${existingLog.time}`, "error");
-            return;
+    }
+
+    // --- KIỂM TRA GPS ---
+    if (userSession && userSession.requireLocation === true) {
+        showToast("Đang xác thực phạm vi hiện diện...", "info");
+        try {
+            const pos = await new Promise((res, rej) => 
+                navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 7000 })
+            );
+            
+            if (userSession.adminLocation) {
+                const dist = getDistance(
+                    pos.coords.latitude, pos.coords.longitude,
+                    userSession.adminLocation.lat, userSession.adminLocation.lng
+                );
+                const allowedRadius = Number(userSession.locationRadius) || 50;
+                if (dist > allowedRadius) {
+                    return showToast(`Không thành công! Bạn ở cách xa ${dist.toFixed(0)}m.`, "error");
+                }
+            }
+        } catch (e) {
+            return showToast(getGpsErrorMessage(e), "error");
         }
+    }
+
+    // --- GỬI DỮ LIỆU VỚI FINGERPRINT ---
+    try {
+        await rdb.ref('dynamic_attendance/logs/' + userSession.code).push({ 
+            values: vals, 
+            time: time, 
+            ts: Date.now(),
+            fingerprint: fingerprint,        // Lưu fingerprint thay vì deviceId
+            userAgent: navigator.userAgent   // Thêm User Agent để kiểm tra chéo
+        });
         
-    } catch (e) { 
+        document.getElementById('success-overlay').style.display = 'flex';
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        
+        // Tự động ẩn sau 3 giây
+        setTimeout(() => {
+            document.getElementById('success-overlay').style.display = 'none';
+        }, 3000);
+        
+    } catch (e) {
+        showToast("Lỗi hệ thống: Không thể gửi dữ liệu!", "error");
         console.error(e);
     }
 }

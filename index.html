@@ -1268,47 +1268,53 @@ async function submitAttendance() {
     const vals = Array.from(document.querySelectorAll('.u-input')).map(i => i.value.trim());
     if(vals.some(v => !v)) return showToast("Vui lòng điền đủ thông tin!", "info");
     
-    currentUserName = vals[0];
+    currentUserName = vals[0]; // Lấy Họ Tên thí sinh
     const deviceId = getUniqueDeviceId(); 
+    
+    showToast("Đang xác thực vị trí...", "info");
 
-    // LẤY TỌA ĐỘ NGAY LẬP TỨC KHI BẤM NÚT
-    let userLocation = null;
-    try {
-        const pos = await new Promise((res, rej) => 
-            navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 5000 })
-        );
-        userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    } catch (e) {
-        console.warn("Không lấy được GPS ngay lúc này, sẽ gửi log không tọa độ.");
-    }
+    // LẤY TỌA ĐỘ THỰC TẾ CỦA THÍ SINH
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        const userLocation = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            lastSeen: Date.now(),
+            name: currentUserName,
+            status: "online"
+        };
 
-    try {
         const time = new Date().toLocaleString('vi-VN');
-        // GỬI KÈM TỌA ĐỘ VÀO LOG
         const logData = { 
             values: vals, 
             time: time, 
             ts: Date.now(), 
             deviceId: deviceId,
-            location: userLocation // Thêm dòng này
+            location: userLocation // Lưu tọa độ vào lịch sử
         };
 
-        if (navigator.onLine) {
-            await rdb.ref('dynamic_attendance/logs/' + userSession.code).push(logData);
-            // Gửi luôn một bản tin Live đầu tiên để hiện dấu chấm ngay
-            if(userLocation) {
-                rdb.ref(`dynamic_attendance/live_locations/${userSession.code}/${deviceId}`).set({
-                    name: currentUserName, ...userLocation, lastSeen: Date.now()
-                });
+        try {
+            if (navigator.onLine) {
+                // 1. Đẩy vào danh sách Báo cáo
+                await rdb.ref('dynamic_attendance/logs/' + userSession.code).push(logData);
+                
+                // 2. Đẩy thẳng lên Bản đồ Radar (Bản tin đầu tiên)
+                await rdb.ref(`dynamic_attendance/live_locations/${userSession.code}/${deviceId}`).set(userLocation);
+                
+                // 3. Bắt đầu chế độ gửi vị trí định kỳ (mỗi 1 phút)
+                startLiveTracking(userSession.code, currentUserName); 
+            } else {
+                saveOfflineData(userSession.code, logData);
             }
-            startLiveTracking(userSession.code, currentUserName); 
-        } else {
-            saveOfflineData(userSession.code, logData);
+            
+            document.getElementById('success-overlay').style.display = 'flex';
+            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        } catch (e) {
+            showToast("Lỗi kết nối máy chủ!", "error");
         }
-        
-        document.getElementById('success-overlay').style.display = 'flex';
-        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-    } catch (e) { showToast("Lỗi gửi dữ liệu!", "error"); }
+
+    }, (err) => {
+        showToast("Lỗi GPS: Vui lòng cho phép truy cập vị trí để điểm danh!", "error");
+    }, { enableHighAccuracy: true, timeout: 8000 });
 }
 
 // 3. MỞ TRANG TÍNH (MỞ LINK TRỰC TIẾP)
@@ -3973,38 +3979,18 @@ let adminMap = null;
 let mapMarkers = {}; // Để quản lý các chấm trên bản đồ
 
 function initAdminRadar(sessionCode) {
-    // 1. Khởi tạo bản đồ nếu chưa có
     if (!adminMap) {
-        // Tạm thời để Hà Nội, nhưng sẽ cập nhật ngay lập tức sau 0.1s
-        adminMap = L.map('admin-map').setView([21.0285, 105.8542], 13);
+        // Khởi tạo bản đồ mặc định
+        adminMap = L.map('admin-map').setView([10.762622, 106.660172], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap'
         }).addTo(adminMap);
-
-        // LẤY VỊ TRÍ THỰC TẾ CỦA ADMIN VÀ ĐƯA VÀO TRUNG TÂM
-        navigator.geolocation.getCurrentPosition(pos => {
-            const adminLat = pos.coords.latitude;
-            const adminLng = pos.coords.longitude;
-            
-            adminMap.setView([adminLat, adminLng], 15); // Nhảy đến vị trí Admin, zoom mức 15
-
-            // Thêm một biểu tượng đặc biệt để đánh dấu Admin
-            L.marker([adminLat, adminLng], {
-                icon: L.icon({
-                    iconUrl: 'https://i.ibb.co/XfkmdYjC/LOGO-S-CHECK.png', // Dùng logo của bạn làm icon Admin
-                    iconSize: [35, 35],
-                    className: 'admin-marker-style'
-                })
-            }).addTo(adminMap).bindPopup("<b>Vị trí của bạn (Admin)</b>").openPopup();
-        }, (err) => {
-            console.warn("Không thể lấy vị trí Admin: " + err.message);
-            showToast("Vui lòng bật định vị để bản đồ hiển thị đúng khu vực của bạn", "info");
-        });
     }
 
-    // 2. Lắng nghe dữ liệu Live từ thí sinh
+    // Lắng nghe dữ liệu Live từ Thí sinh
     const liveRef = rdb.ref(`dynamic_attendance/live_locations/${sessionCode}`);
-    liveRef.off(); // Xóa lắng nghe cũ
+    liveRef.off(); // Gỡ bỏ lắng nghe cũ để tránh trùng lặp
+    
     liveRef.on('value', (snap) => {
         const data = snap.val();
         if (!data) return;
@@ -4013,29 +3999,31 @@ function initAdminRadar(sessionCode) {
         const markerGroup = [];
 
         Object.entries(data).forEach(([deviceId, info]) => {
-            const isOffline = (now - info.lastSeen) > 120000;
-            const dotColor = isOffline ? '#ef4444' : '#10b981';
+            // Nếu thí sinh không cập nhật vị trí quá 3 phút -> Màu đỏ (Offline/Mất mạng)
+            const isStale = (now - info.lastSeen) > 180000;
+            const dotColor = isStale ? '#ef4444' : '#10b981';
 
             if (mapMarkers[deviceId]) {
+                // Cập nhật vị trí thí sinh cũ
                 mapMarkers[deviceId].setLatLng([info.lat, info.lng]);
                 mapMarkers[deviceId].setStyle({ fillColor: dotColor });
             } else {
+                // Tạo dấu chấm cho thí sinh mới
                 mapMarkers[deviceId] = L.circleMarker([info.lat, info.lng], {
-                    radius: 9,
+                    radius: 10,
                     fillColor: dotColor,
-                    color: '#fff',
-                    weight: 2,
-                    fillOpacity: 0.9
-                }).addTo(adminMap).bindPopup(`<b>${info.name}</b>`);
+                    color: '#ffffff',
+                    weight: 3,
+                    fillOpacity: 1
+                }).addTo(adminMap).bindPopup(`<b>Thí sinh: ${info.name}</b><br>Cập nhật: ${new Date(info.lastSeen).toLocaleTimeString()}`);
             }
             markerGroup.push(mapMarkers[deviceId]);
         });
 
-        // Tự động căn chỉnh để thấy cả Admin và thí sinh (nếu muốn)
-        // Nếu bạn muốn bản đồ LUÔN bám theo vị trí thí sinh mới nhất:
+        // TỰ ĐỘNG ZOOM ĐỂ THẤY TẤT CẢ THÍ SINH
         if (markerGroup.length > 0) {
             const group = new L.featureGroup(markerGroup);
-            adminMap.fitBounds(group.getBounds().pad(0.3));
+            adminMap.fitBounds(group.getBounds().pad(0.2)); 
         }
     });
 }

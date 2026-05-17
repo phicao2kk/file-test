@@ -27,20 +27,6 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,900;1,400;1,900&family=Plus+Jakarta+Sans:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet">
 
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>
-        #admin-map { 
-            height: 500px; 
-            width: 100%; 
-            border-radius: 20px; 
-            border: 2px solid rgba(99, 102, 241, 0.2);
-            margin-top: 20px;
-        }
-        .marker-online { filter: hue-rotate(120deg); } /* Màu xanh */
-        .marker-offline { filter: grayscale(1); }    /* Màu xám */
-    </style>
-
     <style>
 
 /* Khi dấu chấm chuyển sang trạng thái khóa */
@@ -62,13 +48,6 @@ input:disabled {
     color: #64748b !important; /* Màu chữ xám Slate */
 }
 
-.admin-marker-style {
-    border: 3px solid #6366f1;
-    border-radius: 50%;
-    background: white;
-    box-shadow: 0 0 15px rgba(99, 102, 241, 0.6);
-}
-
 /* Chống trình duyệt đổ màu nền khi tự động điền mật khẩu/tài khoản */
 input:-webkit-autofill,
 input:-webkit-autofill:hover, 
@@ -79,12 +58,6 @@ input:-webkit-autofill:active {
     -webkit-box-shadow: 0 0 0px 1000px rgba(15, 23, 42, 0.95) inset !important;
     transition: background-color 5000s ease-in-out 0s;
     border: 1px solid rgba(59, 130, 246, 0.2) !important; /* Giữ màu viền xanh */
-}
-
-.member-dot {
-    stroke: #ffffff;
-    stroke-width: 2;
-    stroke-opacity: 1;
 }
 
 /* Ép màu nền cho tất cả input */
@@ -954,23 +927,7 @@ input:focus {
 
     <!-- CỘT PHẢI (8 cột): BÁO CÁO -->
     <div class="lg:col-span-8 glass p-6 lg:p-10 rounded-[32px] border border-white/10 flex flex-col min-h-[700px] shadow-2xl relative">
-        
-        <!-- ĐƯA BẢN ĐỒ VÀO ĐÂY -->
-    <div id="radar-map-container" class="glass p-4 rounded-[32px] mb-12 border border-indigo-500/20 shadow-2xl">
-        <div class="flex justify-between items-center mb-4 px-2">
-            <div>
-                <h3 class="text-sm font-black text-indigo-400 uppercase italic">Radar Hành Trình Live</h3>
-                <p class="text-[9px] text-slate-500 font-bold uppercase">Tín hiệu cập nhật từ vệ tinh</p>
-            </div>
-            <div class="flex gap-4">
-                <div class="flex items-center gap-1"><span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> <span class="text-[8px] uppercase font-black text-slate-400">Online</span></div>
-                <div class="flex items-center gap-1"><span class="w-2 h-2 bg-red-500 rounded-full"></span> <span class="text-[8px] uppercase font-black text-slate-400">Mất sóng</span></div>
-            </div>
-        </div>
-        <div id="admin-map" style="height: 400px; width: 100%; border-radius: 20px;" class="z-0"></div>
-    </div>
-
-        <div class="flex justify-between items-start mb-6 mt-8">
+        <div class="flex justify-between items-start mb-6">
             <div class="flex flex-col">
                 <div id="history-label" class="hidden mb-1">
                     <span class="text-[9px] font-black text-indigo-400 uppercase tracking-[4px] italic animate-pulse">Bạn đang xem lịch sử</span>
@@ -1266,73 +1223,95 @@ function finishActivation(code, title) {
     btn.style.background = "linear-gradient(135deg, #10b981, #3b82f6)";
 }
 
-// Thêm biến toàn cục để lưu tên người dùng sau khi điểm danh
-let currentUserName = "";
-
 // 2. GỬI ĐIỂM DANH
 async function submitAttendance() {
-    // 1. Kiểm tra dữ liệu đầu vào
+    // Lấy dữ liệu từ các ô nhập
     const vals = Array.from(document.querySelectorAll('.u-input')).map(i => i.value.trim());
     if(vals.some(v => !v)) return showToast("Vui lòng điền đủ thông tin!", "info");
     
-    currentUserName = vals[0]; // Lấy Họ Tên (thường là ô input đầu tiên)
+    // Lấy ID duy nhất của máy này
     const deviceId = getUniqueDeviceId(); 
-    
-    showToast("Đang xác thực tọa độ...", "info");
 
-    // 2. LẤY TỌA ĐỘ NGAY LẬP TỨC (Dùng Promise như logic của bạn)
-    let userLocation = null;
+// --- KIỂM TRA TRÙNG LẶP (CHỈ KHI KHÔNG BẬT TEST MODE) ---
+// Trong hàm submitAttendance(), thay thế đoạn kiểm tra cũ bằng:
+if (!userSession.allowMultiple) {
+    showToast("Đang xác thực thiết bị...", "info");
     try {
-        const pos = await new Promise((res, rej) => 
-            navigator.geolocation.getCurrentPosition(res, rej, { 
-                enableHighAccuracy: true, 
-                timeout: 5000 
-            })
-        );
-        userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    } catch (e) {
-        console.warn("Không lấy được GPS ngay lúc này, bản ghi sẽ không có tọa độ.");
-    }
-
-    // 3. Chuẩn bị dữ liệu
-    const time = new Date().toLocaleString('vi-VN');
-    const logData = { 
-        values: vals, 
-        time: time, 
-        ts: Date.now(), 
-        deviceId: deviceId,
-        location: userLocation // Lưu tọa độ vào lịch sử điểm danh
-    };
-
-    try {
-        if (navigator.onLine) {
-            // GỬI LOG ĐIỂM DANH CHÍNH
-            await rdb.ref('dynamic_attendance/logs/' + userSession.code).push(logData);
-
-            // GỬI BẢN TIN LIVE ĐẦU TIÊN (Để hiện chấm trên Map Admin ngay lập tức)
-            if(userLocation) {
-                await rdb.ref(`dynamic_attendance/live_locations/${userSession.code}/${deviceId}`).set({
-                    name: currentUserName,
-                    lat: userLocation.lat,
-                    lng: userLocation.lng,
-                    lastSeen: Date.now()
-                });
+        const checkRef = rdb.ref('dynamic_attendance/logs/' + userSession.code);
+        const snapshot = await checkRef.once('value');
+        
+        let found = false;
+        let existingLog = null;
+        
+        if (snapshot.exists()) {
+            const logs = snapshot.val();
+            for (const [logId, log] of Object.entries(logs)) {
+                // So sánh fingerprint (đã cải tiến)
+                if (log.fingerprint === deviceId) {
+                    found = true;
+                    existingLog = log;
+                    break;
+                }
             }
-
-            // KÍCH HOẠT THEO DÕI HÀNH TRÌNH ĐỊNH KỲ (Mỗi 1 phút gửi 1 lần)
-            startLiveTracking(userSession.code, currentUserName); 
-        } else {
-            // LOGIC OFFLINE: Lưu vào bộ nhớ máy nếu mất mạng
-            saveOfflineData(userSession.code, logData);
         }
         
-        // 4. Hiệu ứng thành công
-        document.getElementById('success-overlay').style.display = 'flex';
-        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-
+        if (found) {
+            // Hiển thị thông báo chi tiết
+            showToast(`⚠️ Thiết bị này đã điểm danh lúc ${existingLog.time}`, "error");
+            return;
+        }
+        
     } catch (e) { 
         console.error(e);
-        showToast("Lỗi hệ thống: Không thể gửi dữ liệu!", "error"); 
+    }
+}
+
+// Khi lưu log, thêm fingerprint thay vì deviceId cũ
+await rdb.ref('dynamic_attendance/logs/' + userSession.code).push({ 
+    values: vals, 
+    time: time, 
+    ts: Date.now(),
+    fingerprint: deviceId,  // Thay deviceId bằng fingerprint
+    userAgent: navigator.userAgent  // Thêm User Agent để kiểm tra chéo
+});
+
+    // --- BƯỚC 2: KIỂM TRA GPS (CHỈ KHI ADMIN BẬT) ---
+    if (userSession && userSession.requireLocation === true) {
+        showToast("Đang xác thực phạm vi hiện diện...", "info");
+        try {
+            const pos = await new Promise((res, rej) => 
+                navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 7000 })
+            );
+            
+            if (userSession.adminLocation) {
+                const dist = getDistance(
+                    pos.coords.latitude, pos.coords.longitude,
+                    userSession.adminLocation.lat, userSession.adminLocation.lng
+                );
+                const allowedRadius = Number(userSession.locationRadius) || 50;
+                if (dist > allowedRadius) {
+                    return showToast(`Không thành công! Bạn ở cách xa ${dist.toFixed(0)}m.`, "error");
+                }
+            }
+        } catch (e) {
+            return showToast(getGpsErrorMessage(e), "error");
+        }
+    }
+
+    // --- BƯỚC 3: GỬI DỮ LIỆU (PHẢI GỬI KÈM DEVICEID) ---
+    const time = new Date().toLocaleString('vi-VN');
+    try {
+        await rdb.ref('dynamic_attendance/logs/' + userSession.code).push({ 
+            values: vals, 
+            time: time, 
+            ts: Date.now(),
+            deviceId: deviceId // Viết thường chữ d, viết hoa chữ I (deviceId)
+        });
+        
+        document.getElementById('success-overlay').style.display = 'flex';
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    } catch (e) {
+        showToast("Lỗi hệ thống: Không thể gửi dữ liệu!", "error");
     }
 }
 
@@ -1530,9 +1509,6 @@ function listenLogs(code) {
     // BƯỚC QUAN TRỌNG: Gỡ bỏ tất cả các Listener cũ trên đường dẫn này 
     // để tránh việc hiện thông báo trùng lặp (nổ 2-3 lần)
     rdb.ref(logsPath).off(); 
-
-    // Nó sẽ lấy mã phòng hiện tại để vẽ các chấm di chuyển
-    initAdminRadar(code); 
 
     // Sau đó mới thiết lập thông báo thời gian thực mới
     setupRealtimeNotify(code);
@@ -3148,14 +3124,282 @@ function getGpsErrorMessage(err) {
 }
 
 // Hàm lấy hoặc tạo mã định danh thiết bị (Device ID)
-function getUniqueDeviceId() {
-    let deviceId = localStorage.getItem('scheck_device_fingerprint');
-    if (!deviceId) {
-        // Tạo chuỗi ngẫu nhiên kết hợp với thời gian để làm ID
-        deviceId = 'dev-' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-        localStorage.setItem('scheck_device_fingerprint', deviceId);
+// HÀM TẠO FINGERPRINT NÂNG CAO (Canvas + WebGL + Audio + Battery)
+async function getUniqueDeviceId() {
+    // Kiểm tra xem đã có trong sessionStorage chưa (tránh tính lại nhiều lần trong cùng phiên)
+    if (sessionStorage.getItem('scheck_advanced_fingerprint')) {
+        return sessionStorage.getItem('scheck_advanced_fingerprint');
     }
-    return deviceId;
+    
+    const components = {};
+    
+    // 1. User Agent và Platform
+    components.ua = navigator.userAgent;
+    components.platform = navigator.platform;
+    components.language = navigator.language;
+    components.languages = navigator.languages ? navigator.languages.join(',') : '';
+    
+    // 2. Màn hình và màu sắc
+    components.screen = `${screen.width}x${screen.height}x${screen.colorDepth}`;
+    components.availScreen = `${screen.availWidth}x${screen.availHeight}`;
+    components.devicePixelRatio = devicePixelRatio;
+    
+    // 3. Múi giờ và ngôn ngữ
+    components.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    components.timezoneOffset = new Date().getTimezoneOffset();
+    
+    // 4. Canvas Fingerprinting (Quan trọng nhất)
+    components.canvas = await getCanvasFingerprint();
+    
+    // 5. WebGL Fingerprinting (GPU - rất khó giả mạo)
+    components.webgl = await getWebGLFingerprint();
+    
+    // 6. Audio Fingerprinting (Tùy chọn - tăng độ chính xác)
+    components.audio = await getAudioFingerprint();
+    
+    // 7. Font chữ hệ thống
+    components.fonts = await getFontFingerprint();
+    
+    // 8. Plugins trình duyệt
+    components.plugins = getPluginsFingerprint();
+    
+    // 9. Touch support
+    components.touchSupport = 'ontouchstart' in window;
+    
+    // 10. WebRTC (IP local - có thể bị che giấu nhưng vẫn hữu ích)
+    components.webRTC = await getWebRTCFingerprint();
+    
+    // Tạo chuỗi hash từ tất cả components
+    const fingerprintString = JSON.stringify(components);
+    const hash = await sha256(fingerprintString);
+    
+    // Lưu vào localStorage và sessionStorage
+    const finalId = `fp_${hash.substring(0, 32)}`;
+    localStorage.setItem('scheck_advanced_fingerprint', finalId);
+    sessionStorage.setItem('scheck_advanced_fingerprint', finalId);
+    
+    return finalId;
+}
+
+// === CÁC HÀM HỖ TRỢ ===
+
+// 1. Canvas Fingerprint
+async function getCanvasFingerprint() {
+    return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 200;
+        canvas.height = 50;
+        const ctx = canvas.getContext('2d');
+        
+        // Vẽ các hình dạng phức tạp
+        ctx.textBaseline = "top";
+        ctx.font = "14px 'Arial'";
+        ctx.fillStyle = "#f60";
+        ctx.fillRect(125, 1, 62, 20);
+        
+        ctx.fillStyle = "#069";
+        ctx.fillText("S-CHECK Pro 2026", 2, 15);
+        
+        ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
+        ctx.font = "18px 'Georgia'";
+        ctx.fillText("Fingerprint", 4, 35);
+        
+        // Vẽ đường cong Bezier
+        ctx.beginPath();
+        ctx.moveTo(10, 45);
+        ctx.bezierCurveTo(50, 30, 90, 60, 130, 40);
+        ctx.stroke();
+        
+        // Vẽ hình tròn với gradient
+        const gradient = ctx.createLinearGradient(150, 10, 190, 40);
+        gradient.addColorStop(0, "red");
+        gradient.addColorStop(1, "blue");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(150, 10, 40, 30);
+        
+        // Lấy dataURL và hash
+        const dataURL = canvas.toDataURL();
+        sha256(dataURL).then(hash => resolve(hash));
+    });
+}
+
+// 2. WebGL Fingerprint (GPU)
+async function getWebGLFingerprint() {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    
+    if (!gl) return 'no_webgl_support';
+    
+    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+    if (!debugInfo) return 'no_debug_info';
+    
+    const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+    const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+    
+    // Lấy thêm thông tin về shader
+    const shaderPrecision = gl.getShaderPrecisionFormat(gl.VERTEX_SHADER, gl.HIGH_FLOAT);
+    
+    const webglData = {
+        vendor: vendor,
+        renderer: renderer,
+        maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+        maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
+        maxVertexUniformVectors: gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS),
+        maxVaryingVectors: gl.getParameter(gl.MAX_VARYING_VECTORS),
+        maxFragmentUniformVectors: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
+        shaderPrecisionHigh: shaderPrecision ? shaderPrecision.precision : 0
+    };
+    
+    const fingerprint = JSON.stringify(webglData);
+    return await sha256(fingerprint);
+}
+
+// 3. Audio Fingerprinting
+async function getAudioFingerprint() {
+    return new Promise((resolve) => {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) {
+                resolve('no_audio_support');
+                return;
+            }
+            
+            const context = new AudioContext();
+            const oscillator = context.createOscillator();
+            const analyser = context.createAnalyser();
+            const gain = context.createGain();
+            const scriptProcessor = context.createScriptProcessor(4096, 1, 1);
+            
+            oscillator.type = 'triangle';
+            oscillator.frequency.value = 10000;
+            
+            gain.gain.value = 0.00001; // Rất nhỏ để không gây khó chịu
+            
+            oscillator.connect(gain);
+            gain.connect(analyser);
+            analyser.connect(scriptProcessor);
+            scriptProcessor.connect(context.destination);
+            
+            const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+            
+            scriptProcessor.onaudioprocess = () => {
+                analyser.getByteFrequencyData(frequencyData);
+                const fingerprint = Array.from(frequencyData.slice(0, 50)).join(',');
+                oscillator.stop();
+                context.close();
+                sha256(fingerprint).then(resolve);
+            };
+            
+            oscillator.start();
+            
+            setTimeout(() => {
+                try {
+                    oscillator.stop();
+                    context.close();
+                } catch(e) {}
+                resolve('audio_timeout');
+            }, 1000);
+            
+        } catch(e) {
+            resolve('audio_error');
+        }
+    });
+}
+
+// 4. Font Fingerprinting
+async function getFontFingerprint() {
+    const fonts = [
+        'Arial', 'Verdana', 'Times New Roman', 'Courier New', 
+        'Georgia', 'Comic Sans MS', 'Impact', 'Tahoma', 
+        'Trebuchet MS', 'Lucida Sans Unicode', 'Roboto', 'Open Sans'
+    ];
+    
+    const baseFonts = ['monospace', 'sans-serif', 'serif'];
+    const testString = "mmmmmmmmmmlli";
+    const testSize = "72px";
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    const getWidth = (font) => {
+        ctx.font = `${testSize} ${font}`;
+        return ctx.measureText(testString).width;
+    };
+    
+    const baseWidths = {};
+    baseFonts.forEach(base => {
+        baseWidths[base] = getWidth(base);
+    });
+    
+    const detectedFonts = [];
+    fonts.forEach(font => {
+        let detected = false;
+        baseFonts.forEach(base => {
+            const width = getWidth(`${font},${base}`);
+            if (width !== baseWidths[base]) {
+                detected = true;
+            }
+        });
+        if (detected) detectedFonts.push(font);
+    });
+    
+    return await sha256(detectedFonts.join(','));
+}
+
+// 5. Plugins Fingerprint
+function getPluginsFingerprint() {
+    const plugins = [];
+    for (let i = 0; i < navigator.plugins.length; i++) {
+        const plugin = navigator.plugins[i];
+        plugins.push(plugin.name);
+    }
+    return plugins.join(',');
+}
+
+// 6. WebRTC Fingerprint (lấy IP local)
+async function getWebRTCFingerprint() {
+    return new Promise((resolve) => {
+        const ips = [];
+        const PeerConnection = window.RTCPeerConnection || 
+                              window.webkitRTCPeerConnection || 
+                              window.mozRTCPeerConnection;
+        
+        if (!PeerConnection) {
+            resolve('no_webrtc');
+            return;
+        }
+        
+        const pc = new PeerConnection({ iceServers: [] });
+        pc.createDataChannel('');
+        pc.createOffer()
+            .then(offer => pc.setLocalDescription(offer))
+            .catch(() => {});
+        
+        pc.onicecandidate = (event) => {
+            if (event && event.candidate && event.candidate.candidate) {
+                const ip = event.candidate.candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
+                if (ip && !ips.includes(ip[0])) {
+                    ips.push(ip[0]);
+                }
+            } else {
+                sha256(ips.join(',')).then(resolve);
+                pc.close();
+            }
+        };
+        
+        setTimeout(() => {
+            pc.close();
+            sha256(ips.join(',')).then(resolve);
+        }, 1000);
+    });
+}
+
+// Hàm băm SHA-256
+async function sha256(message) {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
 }
 
 // --- BIẾN TOÀN CỤC CHO ĐỐI SOÁT (thêm biến lưu nhóm) ---
@@ -3982,163 +4226,24 @@ function prepareAbsentCheck(code, title, fieldsBase64) {
     }
 }
 
-// Tự động đồng bộ khi có mạng lại (Dành cho vùng cao)
-window.addEventListener('online', () => {
-    let breadcrumbs = JSON.parse(localStorage.getItem('offline_breadcrumbs') || "[]");
-    if (breadcrumbs.length > 0) {
-        showToast("Đang đồng bộ vị trí hành trình...", "info");
-        breadcrumbs.forEach(item => {
-            rdb.ref(`dynamic_attendance/live_locations/${item.sessionCode}/${item.deviceId}`).set(item.trackData);
-        });
-        localStorage.removeItem('offline_breadcrumbs');
-    }
-});
-
-let adminMap = null;
-let mapMarkers = {}; // Để quản lý các chấm trên bản đồ
-let adminMarker = null; // Biến lưu dấu mốc của Admin
-
-function initAdminRadar(sessionCode) {
-    // 1. KHỞI TẠO BẢN ĐỒ (Nếu chưa có)
-    if (!adminMap) {
-        // Mặc định ban đầu (Hà Nội), sẽ nhảy về vị trí thực ngay sau đó
-        adminMap = L.map('admin-map').setView([21.0285, 105.8542], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(adminMap);
-
-        // Fix lỗi bản đồ bị xám/lệch khi nằm trong Grid Tailwind
-        setTimeout(() => { adminMap.invalidateSize(); }, 500);
-
-        // Lấy vị trí Admin và đánh dấu bằng Logo
-        navigator.geolocation.getCurrentPosition(pos => {
-            const adminLat = pos.coords.latitude;
-            const adminLng = pos.coords.longitude;
-            adminMap.setView([adminLat, adminLng], 16);
-
-            const adminIcon = L.icon({
-                iconUrl: 'https://i.ibb.co/XfkmdYjC/LOGO-S-CHECK.png',
-                iconSize: [50, 50],
-                iconAnchor: [25, 25], // Đặt tâm logo đúng tọa độ (50/2 = 25)
-                popupAnchor: [0, -25], // Popup hiện ở đỉnh đầu logo
-                className: 'admin-marker-style'
-            });
-
-            if (adminMarker) adminMap.removeLayer(adminMarker);
-            adminMarker = L.marker([adminLat, adminLng], { icon: adminIcon })
-                .addTo(adminMap)
-                .bindPopup("<b>Bạn (Quản trị viên)</b>")
-                .openPopup();
-        }, (err) => {
-            console.warn("GPS Admin bị chặn:", err.message);
-        }, { enableHighAccuracy: true });
-    }
-
-    // 2. XOÁ SẠCH DẤU CHẤM CŨ (Khi chuyển từ sự kiện này sang sự kiện khác)
-    if (mapMarkers) {
-        Object.values(mapMarkers).forEach(marker => adminMap.removeLayer(marker));
-        mapMarkers = {}; // Reset danh sách quản lý
-    }
-
-    // 3. LẮNG NGHE DỮ LIỆU LIVE TỪ THÍ SINH
-    const liveRef = rdb.ref(`dynamic_attendance/live_locations/${sessionCode}`);
-    liveRef.off(); // Gỡ bỏ lắng nghe cũ
-
-    liveRef.on('value', (snap) => {
-        const data = snap.val();
-        if (!data) return;
-
-        const now = Date.now();
-        const markerGroup = [];
-
-        // Luôn đưa Admin vào nhóm tính toán vùng hiển thị
-        if (adminMarker) markerGroup.push(adminMarker);
-
-        Object.entries(data).forEach(([deviceId, info]) => {
-            const isStale = (now - info.lastSeen) > 180000; // 3 phút không cập nhật = Mất sóng
-            const dotColor = isStale ? '#ef4444' : '#10b981'; // Đỏ hoặc Xanh
-
-            if (mapMarkers[deviceId]) {
-                // Nếu đã có chấm, chỉ cập nhật vị trí và màu sắc
-                mapMarkers[deviceId].setLatLng([info.lat, info.lng]);
-                mapMarkers[deviceId].setStyle({ fillColor: dotColor });
-            } else {
-                // Nếu là thí sinh mới, vẽ chấm tròn mới
-                mapMarkers[deviceId] = L.circleMarker([info.lat, info.lng], {
-                    radius: 10,
-                    fillColor: dotColor,
-                    color: '#ffffff', // Viền trắng cho nổi bật
-                    weight: 2,
-                    fillOpacity: 0.9
-                }).addTo(adminMap).bindTooltip(info.name, { 
-                    permanent: false, 
-                    direction: 'top' 
-                });
-            }
-            markerGroup.push(mapMarkers[deviceId]);
-        });
-
-        // 4. TỰ ĐỘNG ZOOM (Tính toán sao cho thấy cả Admin và tất cả thí sinh)
-        if (markerGroup.length > 1) {
-            const group = new L.featureGroup(markerGroup);
-            adminMap.fitBounds(group.getBounds().pad(0.3)); 
-        } else if (markerGroup.length === 1 && adminMarker) {
-            // Nếu chỉ có mỗi Admin, zoom gần vào Admin
-            adminMap.setView(adminMarker.getLatLng(), 17);
+// Kiểm tra xem có đang dùng chế độ ẩn danh không
+function isIncognitoMode() {
+    return new Promise((resolve) => {
+        const fs = window.RequestFileSystem || window.webkitRequestFileSystem;
+        if (!fs) {
+            resolve(false);
+            return;
         }
+        fs(window.TEMPORARY, 100, () => resolve(false), () => resolve(true));
     });
 }
 
-// 2. Hàm gộp Đồng bộ duy nhất
-window.addEventListener('online', async () => {
-    showToast("📶 Đã có tín hiệu mạng! Đang đồng bộ...", "success");
-
-    // Đồng bộ danh sách điểm danh
-    let logs = JSON.parse(localStorage.getItem('offline_attendance_logs') || "[]");
-    if (logs.length > 0) {
-        for (let item of logs) {
-            await rdb.ref('dynamic_attendance/logs/' + item.sessionCode).push(item.logData);
-        }
-        localStorage.removeItem('offline_attendance_logs');
-    }
-
-    // Đồng bộ vết hành trình (Breadcrumbs)
-    let breadcrumbs = JSON.parse(localStorage.getItem('offline_breadcrumbs') || "[]");
-    if (breadcrumbs.length > 0) {
-        for (let item of breadcrumbs) {
-            await rdb.ref(`dynamic_attendance/live_locations/${item.sessionCode}/${item.deviceId}`).set(item.trackData);
-        }
-        localStorage.removeItem('offline_breadcrumbs');
-    }
-    
-    showToast("✅ Đồng bộ hoàn tất!", "success");
-});
-
-// 3. Cập nhật Tracking (Thông minh hơn)
-function startLiveTracking(sessionCode, name) {
-    setInterval(() => {
-        if (!navigator.geolocation) return;
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-            const deviceId = getUniqueDeviceId();
-            const trackData = {
-                name: name,
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                lastSeen: Date.now()
-            };
-
-            if (navigator.onLine) {
-                rdb.ref(`dynamic_attendance/live_locations/${sessionCode}/${deviceId}`).set(trackData);
-            } else {
-                // Lưu vết nếu mất mạng để Admin biết lộ trình sau này
-                let offlineTrack = JSON.parse(localStorage.getItem('offline_breadcrumbs') || "[]");
-                offlineTrack.push({ sessionCode, deviceId, trackData });
-                // Giới hạn chỉ lưu 20 vị trí gần nhất để tránh đầy bộ nhớ máy
-                if(offlineTrack.length > 20) offlineTrack.shift();
-                localStorage.setItem('offline_breadcrumbs', JSON.stringify(offlineTrack));
-            }
-        }, null, { enableHighAccuracy: true });
-    }, 60000); // 1 phút/lần
+// Thêm vào cuối hàm getUniqueDeviceId()
+const isIncognito = await isIncognitoMode();
+if (isIncognito) {
+    // Nếu là chế độ ẩn danh, thêm random factor để giảm độ tin cậy
+    components.incognito = true;
+    components.randomFactor = Math.random();
 }
 
 </script>

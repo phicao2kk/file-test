@@ -1817,30 +1817,37 @@ function handleLogout() {
 function checkCode(forced) {
     if(!forced) return; 
     
-    // === NẾU ĐÃ ĐIỂM DANH, HIỂN THỊ GIAO DIỆN THÀNH CÔNG ===
+    // === NẾU ĐÃ ĐIỂM DANH, HIỂN THỊ GIAO DIỆN THÀNH CÔNG VÀ THOÁT ===
     if (isAttendanceSuccess) {
         const step2 = document.getElementById('u-step-2');
         if (step2) {
-            step2.innerHTML = `
-                <div class="text-center py-12">
-                    <div class="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <div class="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30">
-                            <i class="fa-solid fa-check text-white text-3xl"></i>
+            // Nếu chưa bị thay thế thì thay thế
+            if (!step2.innerHTML.includes('ĐÃ ĐIỂM DANH')) {
+                step2.innerHTML = `
+                    <div class="text-center py-12">
+                        <div class="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <div class="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                                <i class="fa-solid fa-check text-white text-3xl"></i>
+                            </div>
                         </div>
+                        <h2 class="text-3xl font-black text-emerald-400 italic">✅ ĐÃ ĐIỂM DANH</h2>
+                        <p class="text-slate-300 text-base mt-3 font-medium">Cảm ơn bạn đã tham gia!</p>
+                        <p class="text-slate-500 text-sm mt-1">Thông tin đã được ghi nhận</p>
+                        <button onclick="location.reload()" class="mt-8 px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-sm transition-all">
+                            🔄 LÀM MỚI
+                        </button>
                     </div>
-                    <h2 class="text-3xl font-black text-emerald-400 italic">✅ ĐÃ ĐIỂM DANH</h2>
-                    <p class="text-slate-300 text-base mt-3 font-medium">Cảm ơn bạn đã tham gia!</p>
-                    <p class="text-slate-500 text-sm mt-1">Thông tin đã được ghi nhận</p>
-                    <button onclick="location.reload()" class="mt-8 px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-sm transition-all">
-                        🔄 LÀM MỚI
-                    </button>
-                </div>
-            `;
+                `;
+            }
         }
-        showView('user');
-        return;
+        // Hiển thị view user
+        document.getElementById('view-user').classList.remove('hidden');
+        document.getElementById('view-auth').classList.add('hidden');
+        document.getElementById('view-admin').classList.add('hidden');
+        return; // THOÁT NGAY, KHÔNG CHẠY TIẾP
     }
     
+    // === PHẦN CODE CŨ (CHỈ CHẠY KHI CHƯA ĐIỂM DANH) ===
     showView('user');
     const loaderText = document.getElementById('loader-text');
     
@@ -1869,11 +1876,9 @@ function checkCode(forced) {
             return;
         }
         
-        // LẤY DỮ LIỆU SESSION
         userSession = snap.val();
 
-        // === QUAN TRỌNG: LẮNG NGHE THAY ĐỔI THỜI GIAN TỪ FIREBASE ===
-        // Lắng nghe liên tục để cập nhật userSession.timeLimit
+        // Lắng nghe thời gian
         rdb.ref('dynamic_attendance/sessions/' + roomCode + '/timeLimit').on('value', timeSnap => {
             if (timeSnap.exists()) {
                 const timeState = timeSnap.val();
@@ -1884,7 +1889,6 @@ function checkCode(forced) {
                 console.log("🔄 Không có cấu hình thời gian");
             }
         });
-        // ============================================================
         
         setTimeout(() => {
             if(loaderText) loaderText.innerHTML = `<span class="text-emerald-400 font-bold">ĐÃ KẾT NỐI TÍN HIỆU...</span>`;

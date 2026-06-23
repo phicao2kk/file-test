@@ -264,7 +264,6 @@ table th:first-child, table td:first-child {
 }
 
         [v-cloak] { display: none; }
-        #success-overlay { position: fixed !important; inset: 0; z-index: 10000; display: none; align-items: center; justify-content: center; background: rgba(3, 7, 18, 0.95); backdrop-filter: blur(20px); overflow: hidden; }
         #toast-container {
             position: fixed;
             top: 20px;
@@ -721,36 +720,38 @@ input[type="number"] {
     to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-#success-overlay {
-    transition: opacity 0.3s ease;
-    pointer-events: none; /* Mặc định không nhận click */
-}
-#success-overlay[style*="display: flex"] {
-    pointer-events: auto; /* Khi hiển thị thì nhận click */
-}
-
-/* Thêm vào cuối thẻ <style> */
-/* Chặn reload khi bấm nút */
-button[type="button"] {
-    pointer-events: auto;
-}
-
-/* Overlay chiếm toàn màn hình, chặn mọi tương tác */
+/* ===== OVERLAY THÀNH CÔNG - CHẶN MỌI TƯƠNG TÁC ===== */
 #success-overlay {
     position: fixed !important;
     inset: 0 !important;
-    z-index: 10000 !important;
+    z-index: 100000 !important;
     display: none;
     align-items: center;
     justify-content: center;
     background: rgba(3, 7, 18, 0.95);
     backdrop-filter: blur(20px);
-    pointer-events: none;
+    -webkit-backdrop-filter: blur(20px);
     transition: opacity 0.3s ease;
+    pointer-events: none !important;
+    cursor: default !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    touch-action: none !important;
+    -webkit-touch-callout: none !important;
 }
 
-#success-overlay[style*="display: flex"] {
-    pointer-events: auto !important;
+#success-overlay * {
+    pointer-events: none !important;
+    cursor: default !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    touch-action: none !important;
+    -webkit-touch-callout: none !important;
+}
+
+/* VẪN CHO PHÉP CONFETTI HOẠT ĐỘNG */
+#success-overlay canvas {
+    pointer-events: none !important;
 }
 
     </style>
@@ -1700,19 +1701,20 @@ async function submitAttendance(event) {
         
         isAttendanceSuccess = true;
         
-        // === HIỂN THỊ OVERLAY THÀNH CÔNG (GIỐNG HỆT CÁI ĐẦU) ===
+        // === HIỂN THỊ OVERLAY THÀNH CÔNG ===
         const overlay = document.getElementById('success-overlay');
         overlay.style.display = 'flex';
-        overlay.style.pointerEvents = 'auto';
+        overlay.style.pointerEvents = 'none'; // CHỈ CHẶN CLICK, KHÔNG CHẶN F5
         overlay.style.zIndex = '100000';
+        overlay.style.cursor = 'default';
         
         // Bắn confetti
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         
-        // === ẨN TOÀN BỘ FORM (KHÔNG THAY NỘI DUNG) ===
+        // === ẨN TOÀN BỘ FORM ===
         const step2 = document.getElementById('u-step-2');
         if (step2) {
-            step2.style.display = 'none'; // Ẩn form, không thay nội dung
+            step2.style.display = 'none';
         }
         
         // === VÔ HIỆU HÓA NÚT ===
@@ -1720,17 +1722,20 @@ async function submitAttendance(event) {
             btn.style.display = 'none';
         }
         
-        // === OVERLAY HIỂN THỊ MÃI MÃI CHO ĐẾN KHI RELOAD ===
-        // Không có setTimeout
+        // === CHỈ CHẶN CLICK TRÊN OVERLAY, KHÔNG CHẶN F5 ===
+        overlay.onclick = null;
+        overlay.onmousedown = null;
+        overlay.onmouseup = null;
+        overlay.ontouchstart = null;
+        overlay.ontouchend = null;
         
-        // === CLICK VÀO OVERLAY ĐỂ RELOAD ===
-        overlay.onclick = function(e) {
-            if (e.target === this) {
-                window.location.reload();
-            }
-        };
+        // === KHÔNG CHẶN PHÍM TẮT ===
+        // Người dùng vẫn có thể F5, Ctrl+R để reload
         
-        console.log("✅ Điểm danh thành công! Overlay giữ nguyên.");
+        // === CHỈ CHẶN CUỘN TRANG ===
+        document.body.style.overflow = 'hidden';
+        
+        console.log("✅ Điểm danh thành công! Chỉ chặn click, không chặn reload.");
         
     } catch (e) {
         showToast("Lỗi hệ thống: Không thể gửi dữ liệu!", "error");
@@ -1742,6 +1747,7 @@ async function submitAttendance(event) {
         }
         const step2 = document.getElementById('u-step-2');
         if (step2) step2.style.display = 'block';
+        document.body.style.overflow = 'auto';
     }
 }
 
@@ -1822,20 +1828,23 @@ function handleLogout() {
 function checkCode(forced) {
     if(!forced) return; 
     
-    // === NẾU ĐÃ ĐIỂM DANH, KHÔNG LÀM GÌ, GIỮ NGUYÊN OVERLAY ===
+    // === NẾU ĐÃ ĐIỂM DANH, HIỂN THỊ OVERLAY ===
     if (isAttendanceSuccess) {
-        // Đảm bảo overlay vẫn hiển thị
         const overlay = document.getElementById('success-overlay');
         if (overlay && overlay.style.display !== 'flex') {
             overlay.style.display = 'flex';
+            overlay.style.pointerEvents = 'none';
+            overlay.style.cursor = 'default';
+            overlay.onclick = null;
         }
-        // Ẩn form nếu chưa ẩn
         const step2 = document.getElementById('u-step-2');
         if (step2) step2.style.display = 'none';
+        
+        // Chỉ chặn cuộn trang, không chặn F5
+        document.body.style.overflow = 'hidden';
         return;
     }
     
-    // === PHẦN CODE CŨ (CHỈ CHẠY KHI CHƯA ĐIỂM DANH) ===
     showView('user');
     const loaderText = document.getElementById('loader-text');
     

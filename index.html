@@ -753,6 +753,23 @@ button[type="button"] {
     pointer-events: auto !important;
 }
 
+/* Thêm vào cuối thẻ <style> */
+/* Ẩn form khi đã điểm danh */
+.u-form-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.u-form-disabled .u-input {
+    background: rgba(255, 255, 255, 0.02) !important;
+    cursor: not-allowed;
+}
+
+/* Overlay thành công luôn ở trên cùng */
+#success-overlay {
+    z-index: 100000 !important;
+}
+
     </style>
 </head>
 <body>
@@ -1577,21 +1594,18 @@ async function submitAttendance(event) {
         return;
     }
 
-    // === CHẶN MỌI HÀNH VI MẶC ĐỊNH ===
     if (event) {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
     }
     
-    // === KIỂM TRA ĐÃ ĐIỂM DANH THÀNH CÔNG CHƯA ===
     const overlay = document.getElementById('success-overlay');
     if (overlay && overlay.style.display === 'flex') {
         console.log("✅ Đã điểm danh thành công, bỏ qua");
         return;
     }
     
-    // === KHÓA NÚT ĐỂ TRÁNH CLICK NHIỀU LẦN ===
     const btn = document.querySelector('button[onclick^="submitAttendance"]');
     if (btn) {
         btn.disabled = true;
@@ -1615,31 +1629,53 @@ async function submitAttendance(event) {
                 const isRunning = timeState.isRunning || false;
                 const isPaused = timeState.isPaused || false;
                 
+                console.log("⏱️ Trạng thái:", { isUnlocked, remainingSeconds, isRunning, isPaused });
+                
+                // ===== SỬA LẠI THỨ TỰ KIỂM TRA =====
+                
+                // 1. Nếu đã mở khóa (VÔ HẠN) -> cho phép
                 if (isUnlocked) {
                     console.log("🔓 VÔ HẠN: Cho phép điểm danh");
                 } 
-                else if (remainingSeconds <= 0 && isRunning) {
-                    showToast("⏰ THỜI GIAN ĐIỂM DANH ĐÃ HẾT!", "error");
+                // 2. Nếu đang dừng (paused) -> thông báo
+                else if (isPaused) {
+                    showToast("⏸️ HỆ THỐNG ĐANG TẠM DỪNG! Vui lòng liên hệ Admin.", "info");
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
                     return;
                 }
-                else if (isPaused && remainingSeconds > 0) {
-                    showToast("⏸️ HỆ THỐNG ĐANG TẠM DỪNG!", "info");
+                // 3. Nếu thời gian đã hết (remainingSeconds <= 0 và đang chạy hoặc đã chạy xong)
+                else if (remainingSeconds <= 0 && (isRunning || !isRunning)) {
+                    // Kiểm tra nếu đã từng chạy (có totalSeconds > 0) và đã hết giờ
+                    if (timeState.totalSeconds > 0 && remainingSeconds <= 0) {
+                        showToast("⏰ THỜI GIAN ĐIỂM DANH ĐÃ HẾT! Vui lòng liên hệ Admin để gia hạn hoặc mở khóa.", "error");
+                        if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
+                        return;
+                    }
+                }
+                // 4. Nếu chưa kích hoạt thời gian (chưa chạy, chưa mở khóa)
+                else if (!isRunning && !isUnlocked && remainingSeconds === 0) {
+                    // Đây là trường hợp chưa bấm TÙY CHỈNH
+                    showToast("⏳ ADMIN CHƯA KÍCH HOẠT THỜI GIAN! Vui lòng liên hệ Admin.", "info");
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
                     return;
                 }
-                else if (!isRunning && remainingSeconds === 0 && !isUnlocked) {
-                    showToast("⏳ ADMIN CHƯA KÍCH HOẠT THỜI GIAN!", "info");
-                    if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
-                    return;
+                // 5. Đang chạy và còn thời gian -> cho phép
+                else if (isRunning && remainingSeconds > 0) {
+                    console.log("⏱️ ĐANG CHẠY: Còn " + remainingSeconds + " giây");
                 }
+                // 6. Các trường hợp khác - cho phép (fallback)
+                else {
+                    console.log("⚠️ Trạng thái không xác định, cho phép điểm danh");
+                }
+            } else {
+                console.log("ℹ️ Không có cấu hình thời gian, cho phép điểm danh tự do");
             }
         } catch (e) {
             console.warn("Lỗi kiểm tra thời gian:", e);
         }
     }
 
-    // === LẤY DỮ LIỆU ===
+    // === PHẦN CÒN LẠI GIỮ NGUYÊN ===
     const vals = Array.from(document.querySelectorAll('.u-input')).map(i => i.value.trim());
     if(vals.some(v => !v)) {
         showToast("Vui lòng điền đủ thông tin!", "info");
@@ -1649,7 +1685,6 @@ async function submitAttendance(event) {
     
     const deviceId = getUniqueDeviceId(); 
 
-    // === KIỂM TRA TRÙNG LẶP ===
     if (!userSession.allowMultiple) {
         try {
             const checkRef = rdb.ref('dynamic_attendance/logs/' + userSession.code);
@@ -1662,7 +1697,6 @@ async function submitAttendance(event) {
         } catch (e) { console.error(e); }
     }
 
-    // === KIỂM TRA GPS ===
     if (userSession && userSession.requireLocation === true) {
         try {
             const pos = await new Promise((res, rej) => 
@@ -1688,7 +1722,6 @@ async function submitAttendance(event) {
         }
     }
 
-    // === GỬI DỮ LIỆU ===
     const time = new Date().toLocaleString('vi-VN');
     try {
         await rdb.ref('dynamic_attendance/logs/' + userSession.code).push({ 
@@ -1698,69 +1731,67 @@ async function submitAttendance(event) {
             deviceId: deviceId
         });
         
-        // === HIỂN THỊ OVERLAY THÀNH CÔNG ===
+        isAttendanceSuccess = true;
+        
         const overlay = document.getElementById('success-overlay');
         overlay.style.display = 'flex';
         overlay.style.pointerEvents = 'auto';
-        overlay.style.position = 'fixed';
-        overlay.style.inset = '0';
-        overlay.style.zIndex = '10000';
-        overlay.style.background = 'rgba(3, 7, 18, 0.95)';
-        overlay.style.backdropFilter = 'blur(20px)';
         
-        // Bắn confetti
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         
-        isAttendanceSuccess = true;
-
-        // Ẩn nút xác nhận và vô hiệu hóa form
-        const btn = document.querySelector('button[onclick^="submitAttendance"]');
-        if (btn) {
-            btn.style.display = 'none';
-        }
-        document.querySelectorAll('.u-input').forEach(input => {
-            input.disabled = true;
-        });
-
-        // === CHẶN MỌI TƯƠNG TÁC VỚI FORM ===
-        // Vô hiệu hóa tất cả input trong form
-        document.querySelectorAll('.u-input').forEach(input => {
-            input.disabled = true;
-        });
-        
-        // Ẩn nút xác nhận
         if (btn) {
             btn.style.display = 'none';
         }
         
-        // === THÊM SỰ KIỆN CLICK ĐỂ ĐÓNG ===
+        document.querySelectorAll('.u-input').forEach(input => {
+            input.disabled = true;
+            input.style.opacity = '0.5';
+        });
+        
+        const step2 = document.getElementById('u-step-2');
+        if (step2) {
+            const uTitle = document.getElementById('u-title');
+            if (uTitle) uTitle.innerText = '✅ ĐÃ ĐIỂM DANH';
+            
+            const uForm = document.getElementById('u-form');
+            if (uForm) {
+                uForm.innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
+                            <i class="fa-solid fa-check text-white text-3xl"></i>
+                        </div>
+                        <p class="text-slate-300 text-base font-medium">Cảm ơn bạn đã tham gia!</p>
+                        <p class="text-slate-500 text-sm mt-2">Thông tin đã được ghi nhận</p>
+                    </div>
+                `;
+            }
+        }
+        
+        setTimeout(() => {
+            if (overlay.style.display === 'flex') {
+                overlay.style.display = 'none';
+            }
+        }, 5000);
+        
         overlay.onclick = function(e) {
             if (e.target === this) {
-                // KHÔNG LÀM GÌ - GIỮ NGUYÊN MÀN HÌNH
-                // Hoặc có thể reload sau khi đóng
-                // window.location.reload();
+                this.style.display = 'none';
             }
         };
         
-        // === TỰ ĐỘNG RELOAD SAU 5 GIÂY (TÙY CHỌN) ===
-        // Nếu bạn muốn reload để reset form, bỏ comment dòng dưới
-        // setTimeout(() => {
-        //     window.location.reload();
-        // }, 5000);
-        
-        // === KHÔNG LÀM GÌ THÊM - GIỮ NGUYÊN TRANG ===
-        console.log("✅ Điểm danh thành công! Giữ nguyên màn hình.");
+        console.log("✅ Điểm danh thành công!");
         
     } catch (e) {
         showToast("Lỗi hệ thống: Không thể gửi dữ liệu!", "error");
+        isAttendanceSuccess = false;
         if (btn) { 
             btn.disabled = false; 
             btn.innerHTML = 'Xác nhận';
             btn.style.display = 'block';
         }
-        // Mở khóa input nếu lỗi
         document.querySelectorAll('.u-input').forEach(input => {
             input.disabled = false;
+            input.style.opacity = '1';
         });
     }
 }
@@ -1861,7 +1892,7 @@ function checkCode(forced) {
         viewUser.classList.remove('hidden');
         return;
     }
-    
+
     showView('user');
     const loaderText = document.getElementById('loader-text');
     

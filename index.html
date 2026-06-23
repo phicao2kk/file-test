@@ -1521,32 +1521,64 @@ function finishActivation(code, title) {
 }
 
 // 2. GỬI ĐIỂM DANH
+// SỬA HÀM submitAttendance() - THÊM PHẦN KIỂM TRA THỜI GIAN TỪ FIREBASE
+
 async function submitAttendance() {
-    // Kiểm tra giới hạn thời gian TRƯỚC KHI CHO PHÉP ĐIỂM DANH
-    if (!timeLimit.isUnlocked) {
-        // Nếu đã hết giờ và không ở trạng thái mở khóa
-        if (timeLimit.remainingSeconds <= 0 && timeLimit.isRunning) {
-            showToast("⏰ THỜI GIAN ĐIỂM DANH ĐÃ HẾT! Vui lòng gia hạn hoặc mở khóa.", "error");
-            return;
-        }
-        // Nếu thời gian đang dừng (paused) và còn giây
-        if (timeLimit.isPaused && timeLimit.remainingSeconds > 0) {
-            showToast("⏸️ HỆ THỐNG ĐANG TẠM DỪNG. Bấm 'GIA HẠN' để tiếp tục.", "info");
-            return;
-        }
-        // Nếu chưa kích hoạt thời gian (remainingSeconds = 0, không running)
-        if (!timeLimit.isRunning && timeLimit.remainingSeconds === 0) {
-            showToast("⏳ VUI LÒNG BẤM 'TÙY CHỈNH' ĐỂ ĐẶT THỜI GIAN TRƯỚC KHI ĐIỂM DANH!", "info");
-            return;
+    // === KIỂM TRA GIỚI HẠN THỜI GIAN TỪ FIREBASE (ĐỒNG BỘ CHO NGƯỜI ĐIỂM DANH) ===
+    if (userSession && userSession.code) {
+        try {
+            // Lấy trạng thái thời gian từ Firebase
+            const timeSnap = await rdb.ref('dynamic_attendance/sessions/' + userSession.code + '/timeLimit').once('value');
+            
+            if (timeSnap.exists()) {
+                const timeState = timeSnap.val();
+                const isUnlocked = timeState.isUnlocked || false;
+                const remainingSeconds = timeState.remainingSeconds || 0;
+                const isRunning = timeState.isRunning || false;
+                const isPaused = timeState.isPaused || false;
+                
+                // Nếu đã mở khóa -> cho phép điểm danh
+                if (isUnlocked) {
+                    // Cho phép điểm danh
+                } 
+                // Nếu thời gian đã hết
+                else if (remainingSeconds <= 0 && isRunning) {
+                    showToast("⏰ THỜI GIAN ĐIỂM DANH ĐÃ HẾT! Vui lòng liên hệ Admin để gia hạn hoặc mở khóa.", "error");
+                    return;
+                }
+                // Nếu thời gian đang dừng (paused)
+                else if (isPaused && remainingSeconds > 0) {
+                    showToast("⏸️ HỆ THỐNG ĐANG TẠM DỪNG. Vui lòng liên hệ Admin.", "info");
+                    return;
+                }
+                // Nếu chưa kích hoạt thời gian
+                else if (!isRunning && remainingSeconds === 0 && !isUnlocked) {
+                    showToast("⏳ ADMIN CHƯA KÍCH HOẠT THỜI GIAN! Vui lòng liên hệ Admin.", "info");
+                    return;
+                }
+                // Nếu đang chạy nhưng hết giờ (trường hợp đặc biệt)
+                else if (remainingSeconds <= 0 && !isUnlocked) {
+                    showToast("⏰ THỜI GIAN ĐÃ HẾT! Vui lòng liên hệ Admin.", "error");
+                    return;
+                }
+            } else {
+                // Không có cấu hình thời gian -> cho phép điểm danh bình thường (không giới hạn)
+                console.log("Không có cấu hình thời gian, cho phép điểm danh tự do");
+            }
+        } catch (e) {
+            console.warn("Lỗi kiểm tra thời gian từ Firebase:", e);
+            // Vẫn cho điểm danh nếu lỗi kiểm tra (tránh chặn người dùng)
         }
     }
 
+    // === PHẦN KIỂM TRA CŨ (GIỮ NGUYÊN) ===
     // Lấy dữ liệu từ các ô nhập
     const vals = Array.from(document.querySelectorAll('.u-input')).map(i => i.value.trim());
     if(vals.some(v => !v)) return showToast("Vui lòng điền đủ thông tin!", "info");
     
     const deviceId = getUniqueDeviceId(); 
 
+    // Kiểm tra trùng lặp
     if (!userSession.allowMultiple) {
         showToast("Đang kiểm tra dữ liệu thiết bị...", "info");
         try {
@@ -1560,6 +1592,7 @@ async function submitAttendance() {
         console.log("Chế độ test (cho phép nhiều lượt): bỏ qua kiểm tra trùng lặp");
     }
 
+    // Kiểm tra GPS
     if (userSession && userSession.requireLocation === true) {
         showToast("Đang xác thực phạm vi hiện diện...", "info");
         try {
@@ -1582,6 +1615,7 @@ async function submitAttendance() {
         }
     }
 
+    // Gửi dữ liệu điểm danh
     const time = new Date().toLocaleString('vi-VN');
     try {
         await rdb.ref('dynamic_attendance/logs/' + userSession.code).push({ 
@@ -1593,6 +1627,11 @@ async function submitAttendance() {
         
         document.getElementById('success-overlay').style.display = 'flex';
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        
+        // Ẩn overlay sau 2.5 giây
+        setTimeout(() => {
+            document.getElementById('success-overlay').style.display = 'none';
+        }, 2500);
     } catch (e) {
         showToast("Lỗi hệ thống: Không thể gửi dữ liệu!", "error");
     }
@@ -1705,6 +1744,17 @@ function checkCode(forced) {
         
         userSession = snap.val();
 
+        rdb.ref('dynamic_attendance/sessions/' + roomCode + '/timeLimit').on('value', timeSnap => {
+            if (timeSnap.exists()) {
+                const timeState = timeSnap.val();
+                // Lưu vào userSession để submitAttendance có thể kiểm tra
+                userSession.timeLimit = timeState;
+                console.log("Đã đồng bộ trạng thái thời gian:", timeState);
+            } else {
+                userSession.timeLimit = null;
+            }
+        });
+        
         setTimeout(() => {
             if(loaderText) loaderText.innerHTML = `<span class="text-emerald-400 font-bold">ĐÃ KẾT NỐI TÍN HIỆU...</span>`;
         }, 500);

@@ -721,6 +721,14 @@ input[type="number"] {
     to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
+#success-overlay {
+    transition: opacity 0.3s ease;
+    pointer-events: none; /* Mặc định không nhận click */
+}
+#success-overlay[style*="display: flex"] {
+    pointer-events: auto; /* Khi hiển thị thì nhận click */
+}
+
     </style>
 </head>
 <body>
@@ -946,8 +954,7 @@ input[type="number"] {
             <button onclick="location.reload()" class="w-8 h-8 flex items-center justify-center bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors">✕</button>
         </div>
         <div id="u-form" class="space-y-4"></div>
-        <button onclick="submitAttendance()" class="btn-glow w-full py-4 rounded-2xl uppercase font-black text-xl">Xác nhận</button>
-    </div>
+        <button onclick="submitAttendance(event)" class="btn-glow w-full py-4 rounded-2xl uppercase font-black text-xl">Xác nhận</button>    </div>
 </div>
 
 <!-- ADMIN VIEW -->
@@ -1539,22 +1546,32 @@ function finishActivation(code, title) {
 // 2. GỬI ĐIỂM DANH
 // SỬA HÀM submitAttendance() - THÊM PHẦN KIỂM TRA THỜI GIAN TỪ FIREBASE
 
-async function submitAttendance() {
+async function submitAttendance(event) {
+    // === NGĂN CHẶN HÀNH VI MẶC ĐỊNH CỦA BUTTON ===
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    // === KIỂM TRA ĐÃ ĐIỂM DANH THÀNH CÔNG CHƯA ===
+    // Nếu đang hiển thị overlay thành công thì không làm gì cả
+    const overlay = document.getElementById('success-overlay');
+    if (overlay && overlay.style.display === 'flex') {
+        console.log("Đã điểm danh thành công, bỏ qua");
+        return;
+    }
+    
     // === KIỂM TRA GIỚI HẠN THỜI GIAN ===
-    // Lấy trực tiếp từ Firebase mỗi lần điểm danh để đảm bảo dữ liệu mới nhất
     if (userSession && userSession.code) {
         try {
-            // Lấy trạng thái thời gian mới nhất từ Firebase
             const timeSnap = await rdb.ref('dynamic_attendance/sessions/' + userSession.code + '/timeLimit').once('value');
             
             let timeState = null;
             if (timeSnap.exists()) {
                 timeState = timeSnap.val();
-                // Cập nhật vào userSession để dùng sau
                 userSession.timeLimit = timeState;
             }
             
-            // Nếu có cấu hình thời gian
             if (timeState) {
                 const isUnlocked = timeState.isUnlocked || false;
                 const remainingSeconds = timeState.remainingSeconds || 0;
@@ -1563,66 +1580,60 @@ async function submitAttendance() {
                 
                 console.log("⏱️ Trạng thái thời gian:", { isUnlocked, remainingSeconds, isRunning, isPaused });
                 
-                // === KIỂM TRA CÁC TRƯỜNG HỢP ===
-                
-                // 1. Nếu đã mở khóa (VÔ HẠN) -> cho phép điểm danh
                 if (isUnlocked) {
                     console.log("🔓 VÔ HẠN: Cho phép điểm danh");
-                    // Tiếp tục điểm danh
                 } 
-                // 2. Nếu thời gian đã hết
                 else if (remainingSeconds <= 0 && isRunning) {
                     showToast("⏰ THỜI GIAN ĐIỂM DANH ĐÃ HẾT! Vui lòng liên hệ Admin để gia hạn.", "error");
                     return;
                 }
-                // 3. Nếu thời gian đang dừng (paused)
                 else if (isPaused && remainingSeconds > 0) {
                     showToast("⏸️ HỆ THỐNG ĐANG TẠM DỪNG. Vui lòng liên hệ Admin.", "info");
                     return;
                 }
-                // 4. Nếu chưa kích hoạt thời gian (không chạy, không còn giây, không mở khóa)
                 else if (!isRunning && remainingSeconds === 0 && !isUnlocked) {
                     showToast("⏳ ADMIN CHƯA KÍCH HOẠT THỜI GIAN! Vui lòng liên hệ Admin.", "info");
                     return;
                 }
-                // 5. Nếu đang chạy và còn giây -> cho phép
                 else if (isRunning && remainingSeconds > 0) {
                     console.log("⏱️ ĐANG CHẠY: Còn " + remainingSeconds + " giây");
-                    // Tiếp tục điểm danh
                 }
-                // 6. Các trường hợp khác - cho phép điểm danh (fallback)
                 else {
                     console.log("⚠️ Trạng thái không xác định, cho phép điểm danh");
                 }
             } else {
-                // Không có cấu hình thời gian -> cho phép điểm danh tự do
                 console.log("ℹ️ Không có cấu hình thời gian, cho phép điểm danh tự do");
             }
         } catch (e) {
             console.warn("Lỗi kiểm tra thời gian từ Firebase:", e);
-            // Vẫn cho điểm danh nếu lỗi kiểm tra (tránh chặn người dùng)
         }
     }
 
-    // === PHẦN KIỂM TRA CŨ ===
+    // === LẤY DỮ LIỆU TỪ FORM ===
     const vals = Array.from(document.querySelectorAll('.u-input')).map(i => i.value.trim());
-    if(vals.some(v => !v)) return showToast("Vui lòng điền đủ thông tin!", "info");
+    if(vals.some(v => !v)) {
+        showToast("Vui lòng điền đủ thông tin!", "info");
+        return;
+    }
     
     const deviceId = getUniqueDeviceId(); 
 
+    // === KIỂM TRA TRÙNG LẶP ===
     if (!userSession.allowMultiple) {
         showToast("Đang kiểm tra dữ liệu thiết bị...", "info");
         try {
             const checkRef = rdb.ref('dynamic_attendance/logs/' + userSession.code);
             const snapshot = await checkRef.orderByChild('deviceId').equalTo(deviceId).once('value');
             if (snapshot.exists()) {
-                return showToast("BẠN ĐÃ ĐIỂM DANH SỰ KIỆN NÀY RỒI!", "error");
+                showToast("BẠN ĐÃ ĐIỂM DANH SỰ KIỆN NÀY RỒI!", "error");
+                return;
             }
         } catch (e) { console.error(e); }
     } else {
         console.log("Chế độ test (cho phép nhiều lượt): bỏ qua kiểm tra trùng lặp");
     }
 
+    // === KIỂM TRA GPS ===
     if (userSession && userSession.requireLocation === true) {
         showToast("Đang xác thực phạm vi hiện diện...", "info");
         try {
@@ -1637,14 +1648,17 @@ async function submitAttendance() {
                 );
                 const allowedRadius = Number(userSession.locationRadius) || 50;
                 if (dist > allowedRadius) {
-                    return showToast(`Không thành công! Bạn ở cách xa ${dist.toFixed(0)}m.`, "error");
+                    showToast(`Không thành công! Bạn ở cách xa ${dist.toFixed(0)}m.`, "error");
+                    return;
                 }
             }
         } catch (e) {
-            return showToast(getGpsErrorMessage(e), "error");
+            showToast(getGpsErrorMessage(e), "error");
+            return;
         }
     }
 
+    // === GỬI DỮ LIỆU ĐIỂM DANH ===
     const time = new Date().toLocaleString('vi-VN');
     try {
         await rdb.ref('dynamic_attendance/logs/' + userSession.code).push({ 
@@ -1654,21 +1668,31 @@ async function submitAttendance() {
             deviceId: deviceId
         });
         
-        // HIỂN THỊ OVERLAY THÀNH CÔNG
-        document.getElementById('success-overlay').style.display = 'flex';
+        // === HIỂN THỊ OVERLAY THÀNH CÔNG ===
+        const overlay = document.getElementById('success-overlay');
+        overlay.style.display = 'flex';
+        overlay.style.pointerEvents = 'auto'; // Cho phép click để đóng
+        
+        // Bắn confetti
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         
-        // === SỬA LỖI: TĂNG THỜI GIAN HIỂN THỊ LÊN 5 GIÂY ===
-        // Hoặc có thể giữ nguyên cho đến khi người dùng click vào màn hình
-        setTimeout(() => {
-            document.getElementById('success-overlay').style.display = 'none';
-        }, 5000); // Tăng từ 2500 lên 5000ms
-        
-        // === HOẶC CÓ THỂ THÊM SỰ KIỆN CLICK ĐỂ ĐÓNG ===
-        // Thêm dòng này nếu muốn người dùng click để đóng
-        document.getElementById('success-overlay').onclick = function() {
-            this.style.display = 'none';
+        // === THÊM SỰ KIỆN CLICK ĐỂ ĐÓNG OVERLAY ===
+        overlay.onclick = function(e) {
+            if (e.target === this) {
+                this.style.display = 'none';
+                this.style.pointerEvents = 'none';
+            }
         };
+        
+        // === TỰ ĐỘNG ĐÓNG SAU 5 GIÂY ===
+        setTimeout(() => {
+            if (overlay.style.display === 'flex') {
+                overlay.style.display = 'none';
+                overlay.style.pointerEvents = 'none';
+            }
+        }, 5000);
+        
+        // === KHÔNG LÀM GÌ THÊM - GIỮ NGUYÊN TRANG ===
         
     } catch (e) {
         showToast("Lỗi hệ thống: Không thể gửi dữ liệu!", "error");

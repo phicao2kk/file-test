@@ -1585,12 +1585,6 @@ async function submitAttendance(event) {
         event.stopImmediatePropagation();
     }
     
-    const overlay = document.getElementById('success-overlay');
-    if (overlay && overlay.style.display === 'flex') {
-        console.log("✅ Đã điểm danh thành công, bỏ qua");
-        return;
-    }
-    
     const btn = document.querySelector('button[onclick^="submitAttendance"]');
     if (btn) {
         btn.disabled = true;
@@ -1613,54 +1607,36 @@ async function submitAttendance(event) {
                 const remainingSeconds = timeState.remainingSeconds || 0;
                 const isRunning = timeState.isRunning || false;
                 const isPaused = timeState.isPaused || false;
+                const totalSeconds = timeState.totalSeconds || 0;
                 
-                console.log("⏱️ Trạng thái:", { isUnlocked, remainingSeconds, isRunning, isPaused });
-                
-                // ===== SỬA LẠI THỨ TỰ KIỂM TRA =====
-                
-                // 1. Nếu đã mở khóa (VÔ HẠN) -> cho phép
                 if (isUnlocked) {
                     console.log("🔓 VÔ HẠN: Cho phép điểm danh");
                 } 
-                // 2. Nếu đang dừng (paused) -> thông báo
                 else if (isPaused) {
-                    showToast("⏸️ HỆ THỐNG ĐANG TẠM DỪNG! Vui lòng liên hệ Admin.", "info");
+                    showToast("⏸️ HỆ THỐNG ĐANG TẠM DỪNG!", "info");
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
                     return;
                 }
-                // 3. Nếu thời gian đã hết (remainingSeconds <= 0 và đang chạy hoặc đã chạy xong)
-                else if (remainingSeconds <= 0 && (isRunning || !isRunning)) {
-                    // Kiểm tra nếu đã từng chạy (có totalSeconds > 0) và đã hết giờ
-                    if (timeState.totalSeconds > 0 && remainingSeconds <= 0) {
-                        showToast("⏰ THỜI GIAN ĐIỂM DANH ĐÃ HẾT! Vui lòng liên hệ Admin để gia hạn hoặc mở khóa.", "error");
-                        if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
-                        return;
-                    }
-                }
-                // 4. Nếu chưa kích hoạt thời gian (chưa chạy, chưa mở khóa)
-                else if (!isRunning && !isUnlocked && remainingSeconds === 0) {
-                    // Đây là trường hợp chưa bấm TÙY CHỈNH
-                    showToast("⏳ ADMIN CHƯA KÍCH HOẠT THỜI GIAN! Vui lòng liên hệ Admin.", "info");
+                else if (totalSeconds > 0 && remainingSeconds <= 0) {
+                    showToast("⏰ THỜI GIAN ĐIỂM DANH ĐÃ HẾT!", "error");
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
                     return;
                 }
-                // 5. Đang chạy và còn thời gian -> cho phép
+                else if (!isRunning && !isUnlocked && totalSeconds === 0) {
+                    showToast("⏳ ADMIN CHƯA KÍCH HOẠT THỜI GIAN!", "info");
+                    if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
+                    return;
+                }
                 else if (isRunning && remainingSeconds > 0) {
                     console.log("⏱️ ĐANG CHẠY: Còn " + remainingSeconds + " giây");
                 }
-                // 6. Các trường hợp khác - cho phép (fallback)
-                else {
-                    console.log("⚠️ Trạng thái không xác định, cho phép điểm danh");
-                }
-            } else {
-                console.log("ℹ️ Không có cấu hình thời gian, cho phép điểm danh tự do");
             }
         } catch (e) {
             console.warn("Lỗi kiểm tra thời gian:", e);
         }
     }
 
-    // === PHẦN CÒN LẠI GIỮ NGUYÊN ===
+    // === LẤY DỮ LIỆU ===
     const vals = Array.from(document.querySelectorAll('.u-input')).map(i => i.value.trim());
     if(vals.some(v => !v)) {
         showToast("Vui lòng điền đủ thông tin!", "info");
@@ -1718,51 +1694,39 @@ async function submitAttendance(event) {
         
         isAttendanceSuccess = true;
         
+        // === HIỂN THỊ OVERLAY THÀNH CÔNG ===
         const overlay = document.getElementById('success-overlay');
         overlay.style.display = 'flex';
         overlay.style.pointerEvents = 'auto';
+        overlay.style.zIndex = '100000';
         
+        // Bắn confetti
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         
-        if (btn) {
-            btn.style.display = 'none';
-        }
-        
-        document.querySelectorAll('.u-input').forEach(input => {
-            input.disabled = true;
-            input.style.opacity = '0.5';
-        });
-        
+        // === THAY TOÀN BỘ FORM BẰNG GIAO DIỆN ĐÃ ĐIỂM DANH ===
         const step2 = document.getElementById('u-step-2');
         if (step2) {
-            const uTitle = document.getElementById('u-title');
-            if (uTitle) uTitle.innerText = '✅ ĐÃ ĐIỂM DANH';
-            
-            const uForm = document.getElementById('u-form');
-            if (uForm) {
-                uForm.innerHTML = `
-                    <div class="text-center py-8">
-                        <div class="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
+            step2.innerHTML = `
+                <div class="text-center py-12">
+                    <div class="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <div class="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30">
                             <i class="fa-solid fa-check text-white text-3xl"></i>
                         </div>
-                        <p class="text-slate-300 text-base font-medium">Cảm ơn bạn đã tham gia!</p>
-                        <p class="text-slate-500 text-sm mt-2">Thông tin đã được ghi nhận</p>
                     </div>
-                `;
-            }
+                    <h2 class="text-3xl font-black text-emerald-400 italic">✅ ĐÃ ĐIỂM DANH</h2>
+                    <p class="text-slate-300 text-base mt-3 font-medium">Cảm ơn bạn đã tham gia!</p>
+                    <p class="text-slate-500 text-sm mt-1">Thông tin đã được ghi nhận</p>
+                    <button onclick="location.reload()" class="mt-8 px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-sm transition-all">
+                        🔄 LÀM MỚI
+                    </button>
+                </div>
+            `;
         }
         
+        // === ẨN OVERLAY SAU 3 GIÂY (để người dùng thấy giao diện mới) ===
         setTimeout(() => {
-            if (overlay.style.display === 'flex') {
-                overlay.style.display = 'none';
-            }
-        }, 5000);
-        
-        overlay.onclick = function(e) {
-            if (e.target === this) {
-                this.style.display = 'none';
-            }
-        };
+            overlay.style.display = 'none';
+        }, 3000);
         
         console.log("✅ Điểm danh thành công!");
         
@@ -1772,12 +1736,7 @@ async function submitAttendance(event) {
         if (btn) { 
             btn.disabled = false; 
             btn.innerHTML = 'Xác nhận';
-            btn.style.display = 'block';
         }
-        document.querySelectorAll('.u-input').forEach(input => {
-            input.disabled = false;
-            input.style.opacity = '1';
-        });
     }
 }
 
@@ -1858,23 +1817,27 @@ function handleLogout() {
 function checkCode(forced) {
     if(!forced) return; 
     
-        // === THÊM VÀO ĐẦU HÀM ===
+    // === NẾU ĐÃ ĐIỂM DANH, HIỂN THỊ GIAO DIỆN THÀNH CÔNG ===
     if (isAttendanceSuccess) {
-        // Hiển thị thông báo đã điểm danh
-        const viewUser = document.getElementById('view-user');
-        viewUser.innerHTML = `
-            <div class="glass p-10 rounded-3xl text-center max-w-md mx-auto">
-                <div class="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
-                    <i class="fa-solid fa-check text-white text-3xl"></i>
+        const step2 = document.getElementById('u-step-2');
+        if (step2) {
+            step2.innerHTML = `
+                <div class="text-center py-12">
+                    <div class="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <div class="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                            <i class="fa-solid fa-check text-white text-3xl"></i>
+                        </div>
+                    </div>
+                    <h2 class="text-3xl font-black text-emerald-400 italic">✅ ĐÃ ĐIỂM DANH</h2>
+                    <p class="text-slate-300 text-base mt-3 font-medium">Cảm ơn bạn đã tham gia!</p>
+                    <p class="text-slate-500 text-sm mt-1">Thông tin đã được ghi nhận</p>
+                    <button onclick="location.reload()" class="mt-8 px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-sm transition-all">
+                        🔄 LÀM MỚI
+                    </button>
                 </div>
-                <h2 class="text-2xl font-black text-emerald-400">✅ ĐÃ ĐIỂM DANH</h2>
-                <p class="text-slate-400 text-sm mt-2">Bạn đã điểm danh thành công!</p>
-                <button onclick="location.reload()" class="mt-6 px-6 py-3 bg-white/10 rounded-xl text-white font-bold hover:bg-white/20 transition-all">
-                    🔄 Tải lại
-                </button>
-            </div>
-        `;
-        viewUser.classList.remove('hidden');
+            `;
+        }
+        showView('user');
         return;
     }
     

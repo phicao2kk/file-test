@@ -738,7 +738,6 @@ input[type="number"] {
     -webkit-user-select: none !important;
     touch-action: none !important;
     -webkit-touch-callout: none !important;
-    font-family: 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important; /* THÊM DÒNG NÀY */
 }
 
 #success-overlay * {
@@ -861,7 +860,10 @@ input[type="number"] {
         </div>
 
         <div class="space-y-1 fix-clipping">
-            <h2 class="text-5xl font-black italic tracking-tighter uppercase leading-none bg-gradient-to-b from-white to-white/30 bg-clip-text text-transparent">HOÀN TẤT</h2>
+            <!-- SỬA: Thêm font-weight và letter-spacing để hiển thị dấu rõ hơn -->
+            <h2 class="text-5xl font-black italic tracking-tighter uppercase leading-none bg-gradient-to-b from-white to-white/30 bg-clip-text text-transparent" style="font-family: 'Be Vietnam Pro', 'Plus Jakarta Sans', sans-serif; font-weight: 900;">
+                HOÀN TẤT
+            </h2>
             <p class="text-emerald-400 font-bold tracking-[0.3em] uppercase text-[10px] opacity-90">Điểm danh thành công</p>
         </div>
 

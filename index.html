@@ -1585,6 +1585,12 @@ async function submitAttendance(event) {
         event.stopImmediatePropagation();
     }
     
+    const overlay = document.getElementById('success-overlay');
+    if (overlay && overlay.style.display === 'flex') {
+        console.log("✅ Đã điểm danh thành công, bỏ qua");
+        return;
+    }
+    
     const btn = document.querySelector('button[onclick^="submitAttendance"]');
     if (btn) {
         btn.disabled = true;
@@ -1694,7 +1700,7 @@ async function submitAttendance(event) {
         
         isAttendanceSuccess = true;
         
-        // === HIỂN THỊ OVERLAY THÀNH CÔNG ===
+        // === HIỂN THỊ OVERLAY THÀNH CÔNG (GIỐNG HỆT CÁI ĐẦU) ===
         const overlay = document.getElementById('success-overlay');
         overlay.style.display = 'flex';
         overlay.style.pointerEvents = 'auto';
@@ -1703,32 +1709,28 @@ async function submitAttendance(event) {
         // Bắn confetti
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         
-        // === THAY TOÀN BỘ FORM BẰNG GIAO DIỆN ĐÃ ĐIỂM DANH ===
+        // === ẨN TOÀN BỘ FORM (KHÔNG THAY NỘI DUNG) ===
         const step2 = document.getElementById('u-step-2');
         if (step2) {
-            step2.innerHTML = `
-                <div class="text-center py-12">
-                    <div class="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <div class="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30">
-                            <i class="fa-solid fa-check text-white text-3xl"></i>
-                        </div>
-                    </div>
-                    <h2 class="text-3xl font-black text-emerald-400 italic">✅ ĐÃ ĐIỂM DANH</h2>
-                    <p class="text-slate-300 text-base mt-3 font-medium">Cảm ơn bạn đã tham gia!</p>
-                    <p class="text-slate-500 text-sm mt-1">Thông tin đã được ghi nhận</p>
-                    <button onclick="location.reload()" class="mt-8 px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-sm transition-all">
-                        🔄 LÀM MỚI
-                    </button>
-                </div>
-            `;
+            step2.style.display = 'none'; // Ẩn form, không thay nội dung
         }
         
-        // === ẨN OVERLAY SAU 3 GIÂY (để người dùng thấy giao diện mới) ===
-        setTimeout(() => {
-            overlay.style.display = 'none';
-        }, 3000);
+        // === VÔ HIỆU HÓA NÚT ===
+        if (btn) {
+            btn.style.display = 'none';
+        }
         
-        console.log("✅ Điểm danh thành công!");
+        // === OVERLAY HIỂN THỊ MÃI MÃI CHO ĐẾN KHI RELOAD ===
+        // Không có setTimeout
+        
+        // === CLICK VÀO OVERLAY ĐỂ RELOAD ===
+        overlay.onclick = function(e) {
+            if (e.target === this) {
+                window.location.reload();
+            }
+        };
+        
+        console.log("✅ Điểm danh thành công! Overlay giữ nguyên.");
         
     } catch (e) {
         showToast("Lỗi hệ thống: Không thể gửi dữ liệu!", "error");
@@ -1736,7 +1738,10 @@ async function submitAttendance(event) {
         if (btn) { 
             btn.disabled = false; 
             btn.innerHTML = 'Xác nhận';
+            btn.style.display = 'block';
         }
+        const step2 = document.getElementById('u-step-2');
+        if (step2) step2.style.display = 'block';
     }
 }
 
@@ -1817,34 +1822,17 @@ function handleLogout() {
 function checkCode(forced) {
     if(!forced) return; 
     
-    // === NẾU ĐÃ ĐIỂM DANH, HIỂN THỊ GIAO DIỆN THÀNH CÔNG VÀ THOÁT ===
+    // === NẾU ĐÃ ĐIỂM DANH, KHÔNG LÀM GÌ, GIỮ NGUYÊN OVERLAY ===
     if (isAttendanceSuccess) {
-        const step2 = document.getElementById('u-step-2');
-        if (step2) {
-            // Nếu chưa bị thay thế thì thay thế
-            if (!step2.innerHTML.includes('ĐÃ ĐIỂM DANH')) {
-                step2.innerHTML = `
-                    <div class="text-center py-12">
-                        <div class="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <div class="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30">
-                                <i class="fa-solid fa-check text-white text-3xl"></i>
-                            </div>
-                        </div>
-                        <h2 class="text-3xl font-black text-emerald-400 italic">✅ ĐÃ ĐIỂM DANH</h2>
-                        <p class="text-slate-300 text-base mt-3 font-medium">Cảm ơn bạn đã tham gia!</p>
-                        <p class="text-slate-500 text-sm mt-1">Thông tin đã được ghi nhận</p>
-                        <button onclick="location.reload()" class="mt-8 px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-sm transition-all">
-                            🔄 LÀM MỚI
-                        </button>
-                    </div>
-                `;
-            }
+        // Đảm bảo overlay vẫn hiển thị
+        const overlay = document.getElementById('success-overlay');
+        if (overlay && overlay.style.display !== 'flex') {
+            overlay.style.display = 'flex';
         }
-        // Hiển thị view user
-        document.getElementById('view-user').classList.remove('hidden');
-        document.getElementById('view-auth').classList.add('hidden');
-        document.getElementById('view-admin').classList.add('hidden');
-        return; // THOÁT NGAY, KHÔNG CHẠY TIẾP
+        // Ẩn form nếu chưa ẩn
+        const step2 = document.getElementById('u-step-2');
+        if (step2) step2.style.display = 'none';
+        return;
     }
     
     // === PHẦN CODE CŨ (CHỈ CHẠY KHI CHƯA ĐIỂM DANH) ===

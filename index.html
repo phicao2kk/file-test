@@ -1654,12 +1654,22 @@ async function submitAttendance() {
             deviceId: deviceId
         });
         
+        // HIỂN THỊ OVERLAY THÀNH CÔNG
         document.getElementById('success-overlay').style.display = 'flex';
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         
+        // === SỬA LỖI: TĂNG THỜI GIAN HIỂN THỊ LÊN 5 GIÂY ===
+        // Hoặc có thể giữ nguyên cho đến khi người dùng click vào màn hình
         setTimeout(() => {
             document.getElementById('success-overlay').style.display = 'none';
-        }, 2500);
+        }, 5000); // Tăng từ 2500 lên 5000ms
+        
+        // === HOẶC CÓ THỂ THÊM SỰ KIỆN CLICK ĐỂ ĐÓNG ===
+        // Thêm dòng này nếu muốn người dùng click để đóng
+        document.getElementById('success-overlay').onclick = function() {
+            this.style.display = 'none';
+        };
+        
     } catch (e) {
         showToast("Lỗi hệ thống: Không thể gửi dữ liệu!", "error");
     }
@@ -4314,44 +4324,51 @@ function updateTimeUI() {
     
     if (!display) return;
     
-    let timeStr = formatTime(timeLimit.remainingSeconds);
-    display.innerText = timeStr;
-    
-    // Cập nhật trạng thái
+    // === KIỂM TRA VÔ HẠN TRƯỚC ===
     if (timeLimit.isUnlocked) {
+        // ✅ DÙNG TAILWINDCSS - KHÔNG CẦN CSS TÙY CHỈNH
         display.innerText = '∞';
-        label.innerText = 'VÔ HẠN - ĐÃ MỞ KHÓA';
+        display.className = 'text-2xl lg:text-3xl font-black tracking-wider text-emerald-400';
+        label.innerText = 'VÔ HẠN - KHÔNG GIỚI HẠN';
         label.className = 'text-[7px] text-emerald-400 uppercase font-bold tracking-[2px]';
         badge.className = 'px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-        badge.innerHTML = '<i class="fa-solid fa-infinity mr-1"></i> MỞ KHÓA';
-        icon.className = 'time-status-icon unlocked text-xl';
+        badge.innerHTML = '<i class="fa-solid fa-infinity mr-1"></i> VÔ HẠN';
+        icon.className = 'time-status-icon text-emerald-400 text-xl';  // <--- KHÁC Ở ĐÂY
         icon.innerHTML = '<i class="fa-solid fa-infinity"></i>';
         remainingText.innerText = '∞';
+        remainingText.className = 'text-[10px] font-black text-emerald-400';
         progressFill.style.width = '100%';
         progressFill.style.background = 'linear-gradient(90deg, #10b981, #34d399)';
-    } else if (timeLimit.isPaused) {
+        return;
+    }
+    
+    // === CÁC TRẠNG THÁI KHÁC ===
+    let timeStr = formatTime(timeLimit.remainingSeconds);
+    display.innerText = timeStr;
+    display.className = 'text-2xl lg:text-3xl font-black time-display-number tracking-wider';
+    
+    if (timeLimit.isPaused) {
         label.innerText = 'TẠM DỪNG (PAUSED)';
         label.className = 'text-[7px] text-yellow-400 uppercase font-bold tracking-[2px]';
         badge.className = 'px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider bg-yellow-500/20 text-yellow-400 border border-yellow-500/30';
         badge.innerHTML = '<i class="fa-regular fa-pause-circle mr-1"></i> ĐÃ DỪNG';
-        icon.className = 'time-status-icon stopped text-xl';
+        icon.className = 'time-status-icon text-yellow-400 text-xl';  // <--- KHÁC Ở ĐÂY
         icon.innerHTML = '<i class="fa-regular fa-pause-circle"></i>';
         remainingText.innerText = timeStr;
-        // Thanh tiến trình giữ nguyên
+        remainingText.className = 'text-[10px] font-black text-yellow-400';
     } else if (timeLimit.isRunning && timeLimit.remainingSeconds > 0) {
         label.innerText = 'ĐANG ĐẾM NGƯỢC';
         label.className = 'text-[7px] text-amber-400 uppercase font-bold tracking-[2px]';
         badge.className = 'px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30';
         badge.innerHTML = '<i class="fa-regular fa-circle-check mr-1"></i> ĐANG CHẠY';
-        icon.className = 'time-status-icon running text-xl';
+        icon.className = 'time-status-icon text-amber-400 text-xl';  // <--- KHÁC Ở ĐÂY
         icon.innerHTML = '<i class="fa-regular fa-clock"></i>';
         remainingText.innerText = timeStr;
+        remainingText.className = 'text-[10px] font-black text-amber-400';
         
-        // Cập nhật thanh tiến trình
         if (timeLimit.totalSeconds > 0) {
             const percent = (timeLimit.remainingSeconds / timeLimit.totalSeconds) * 100;
             progressFill.style.width = Math.max(0, percent) + '%';
-            // Đổi màu khi còn ít
             if (percent < 20) {
                 progressFill.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
             } else if (percent < 50) {
@@ -4365,20 +4382,21 @@ function updateTimeUI() {
         label.className = 'text-[7px] text-red-400 uppercase font-bold tracking-[2px] time-expired';
         badge.className = 'px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/30';
         badge.innerHTML = '<i class="fa-regular fa-circle-xmark mr-1"></i> HẾT GIỜ';
-        icon.className = 'time-status-icon stopped text-xl';
+        icon.className = 'time-status-icon text-red-400 text-xl';  // <--- KHÁC Ở ĐÂY
         icon.innerHTML = '<i class="fa-regular fa-circle-xmark"></i>';
         remainingText.innerText = '00:00';
+        remainingText.className = 'text-[10px] font-black text-red-400';
         progressFill.style.width = '0%';
         progressFill.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
     } else {
-        // Chưa kích hoạt
         label.innerText = 'CHƯA KÍCH HOẠT';
         label.className = 'text-[7px] text-slate-500 uppercase font-bold tracking-[2px]';
         badge.className = 'px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider bg-slate-800/50 text-slate-500 border border-white/5';
         badge.innerHTML = '<i class="fa-regular fa-circle mr-1"></i> TẮT';
-        icon.className = 'time-status-icon text-slate-500 text-xl';
+        icon.className = 'time-status-icon text-slate-500 text-xl';  // <--- KHÁC Ở ĐÂY
         icon.innerHTML = '<i class="fa-regular fa-clock"></i>';
         remainingText.innerText = '--:--';
+        remainingText.className = 'text-[10px] font-black text-slate-500';
         progressFill.style.width = '0%';
         progressFill.style.background = 'linear-gradient(90deg, #fbbf24, #f59e0b)';
     }
@@ -4405,6 +4423,7 @@ function resetTimeLimitState() {
     timeLimit.isUnlocked = true;   // Mặc định VÔ HẠN
     timeLimit.startTime = null;
     timeLimit.pausedAt = null;
+    updateTimeUI();
     
     // Xóa trạng thái trên Firebase (đặt về VÔ HẠN)
     if (timeLimit.code) {

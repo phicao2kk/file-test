@@ -753,23 +753,6 @@ button[type="button"] {
     pointer-events: auto !important;
 }
 
-/* Thêm vào cuối thẻ <style> */
-/* Ẩn form khi đã điểm danh */
-.u-form-disabled {
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-.u-form-disabled .u-input {
-    background: rgba(255, 255, 255, 0.02) !important;
-    cursor: not-allowed;
-}
-
-/* Overlay thành công luôn ở trên cùng */
-#success-overlay {
-    z-index: 100000 !important;
-}
-
     </style>
 </head>
 <body>
@@ -995,7 +978,9 @@ button[type="button"] {
             <button onclick="location.reload()" class="w-8 h-8 flex items-center justify-center bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors">✕</button>
         </div>
         <div id="u-form" class="space-y-4"></div>
-        <button type="button" onclick="submitAttendance(event)" class="btn-glow w-full py-4 rounded-2xl uppercase font-black text-xl">Xác nhận</button></div>
+        <button type="button" onclick="submitAttendance(event)" class="btn-glow w-full py-4 rounded-2xl uppercase font-black text-xl">Xác nhận</button>
+        </div>
+</div>
 
 <!-- ADMIN VIEW -->
 <div id="view-admin" class="w-full max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 page-enter hidden items-start px-4">
@@ -1892,7 +1877,7 @@ function checkCode(forced) {
         viewUser.classList.remove('hidden');
         return;
     }
-
+    
     showView('user');
     const loaderText = document.getElementById('loader-text');
     

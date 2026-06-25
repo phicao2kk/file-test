@@ -754,6 +754,17 @@ input[type="number"] {
     pointer-events: none !important;
 }
 
+/* Thêm vào cuối thẻ <style> */
+/* Nút TIẾP TỤC thời gian */
+.btn-time-resume {
+    background: linear-gradient(135deg, #06b6d4, #0891b2) !important; /* Cyan */
+    box-shadow: 0 0 30px rgba(6, 182, 212, 0.2) !important;
+}
+.btn-time-resume:hover {
+    box-shadow: 0 0 50px rgba(6, 182, 212, 0.4) !important;
+    transform: translateY(-2px) !important;
+}
+
     </style>
 </head>
 <body>
@@ -1043,10 +1054,13 @@ input[type="number"] {
 
                     <!-- Cấu hình bán kính -->
                     <div id="radius-setting-container" class="flex items-center justify-between gap-3 opacity-50 transition-all duration-500">
-                        <span class="text-[9px] font-bold text-slate-500 uppercase">Bán kính (m):</span>
+                        <span class="text-[9px] font-bold text-slate-100 uppercase">Bán kính (m):</span>
                         <div class="flex items-center gap-2">
-                            <input type="number" id="a-location-radius" value="50" min="50" onblur="saveRadiusSettings()" onkeydown="if(event.key === 'Enter') saveRadiusSettings()" class="w-16 p-2 text-center rounded-xl bg-black/40 border border-white/10 text-[11px] font-black text-indigo-400 outline-none focus:border-indigo-500/50">
-                            <button onclick="saveRadiusSettings()" class="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white text-[9px] font-black px-3 py-2 rounded-xl border border-indigo-500/30 transition-all">LƯU</button>
+                            <input type="number" id="a-location-radius" value="50" min="50" 
+                                onchange="queueSaveRadius()"
+                                onkeydown="if(event.key === 'Enter') { event.preventDefault(); queueSaveRadius(); }"
+                                class="w-16 p-2 text-center rounded-xl bg-black/40 border border-white/10 text-[11px] font-black text-indigo-400 outline-none focus:border-indigo-500/50">
+                            <button onclick="queueSaveRadius()" class="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white text-[9px] font-black px-3 py-2 rounded-xl border border-indigo-500/30 transition-all">LƯU</button>
                         </div>
                     </div>
                 </div>
@@ -1062,7 +1076,7 @@ input[type="number"] {
                             <span class="text-[8px] text-slate-500 uppercase font-bold mt-0.5">Tự động khóa điểm danh sau thời gian đặt</span>
                         </div>
                         <div id="time-status-badge" class="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider bg-slate-800/50 text-slate-500 border border-white/5">
-                            <i class="fa-regular fa-circle mr-1"></i> TẮT
+                            <i class="fa-regular fa-circle mr-1"></i> CHƯA HOẠT ĐỘNG
                         </div>
                     </div>
 
@@ -1096,7 +1110,7 @@ input[type="number"] {
                     </div>
 
                     <!-- Các nút điều khiển -->
-                    <div class="grid grid-cols-4 gap-2">
+                    <div class="grid grid-cols-5 gap-2">
                         <!-- Nút TÙY CHỈNH -->
                         <button onclick="openTimeCustomModal()" 
                                 class="btn-time-custom col-span-1 py-2.5 rounded-xl text-[8px] font-black uppercase text-white tracking-wider shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5">
@@ -1113,6 +1127,12 @@ input[type="number"] {
                         <button onclick="stopTimer()" 
                                 class="btn-time-stop col-span-1 py-2.5 rounded-xl text-[8px] font-black uppercase text-white tracking-wider shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5">
                             <i class="fa-solid fa-pause-circle text-[10px]"></i> DỪNG
+                        </button>
+
+                        <!-- Nút TIẾP TỤC (RESUME) - THÊM MỚI -->
+                        <button onclick="resumeTimer()" 
+                                class="btn-time-resume col-span-1 py-2.5 rounded-xl text-[8px] font-black uppercase text-white tracking-wider shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-play-circle text-[10px]"></i> TIẾP TỤC
                         </button>
 
                         <!-- Nút MỞ KHÓA -->
@@ -2187,9 +2207,9 @@ function addField(val = "") {
     
     div.innerHTML = `
         <div class="dot-signal shrink-0 ml-1"></div>
-        <input type="text" class="field-input flex-1 p-3 rounded-xl text-[13px] font-bold outline-none transition-all" 
+        <input type="text" class="field-input flex-1 p-3 rounded-xl text-[13px] font-bold outline-none transition-all placeholder:text-[11px] placeholder:font-normal placeholder:text-slate-500" 
                value="${val}" 
-               placeholder="Ví dụ: Số điện thoại, Email...">
+               placeholder="Nhập tên thông tin bạn cần thu thập...">
         <button onclick="this.parentElement.remove()" class="text-slate-600 hover:text-red-500 transition-colors px-2">
             <i class="fa-solid fa-circle-xmark"></i>
         </button>
@@ -3366,6 +3386,22 @@ function finishActivationProcess(code, title) {
     btn.style.background = "linear-gradient(135deg, #10b981, #3b82f6)";
 }
 
+// ===== BIẾN KIỂM SOÁT =====
+let isSavingRadius = false;
+
+// ===== HÀM GỌI CÓ KIỂM SOÁT (chỉ chạy 1 lần) =====
+function queueSaveRadius() {
+    if (isSavingRadius) {
+        console.log("⏳ Đang xử lý, bỏ qua lần gọi trùng");
+        return;
+    }
+    isSavingRadius = true;
+    
+    // Gọi hàm thực tế
+    saveRadiusSettings();
+}
+
+// ===== HÀM LƯU BÁN KÍNH (KHÔNG ĐỔI) =====
 async function saveRadiusSettings() {
     const radiusInput = document.getElementById('a-location-radius');
     const val = parseInt(radiusInput.value);
@@ -3373,15 +3409,14 @@ async function saveRadiusSettings() {
     if (isNaN(val) || val < 50) {
         radiusInput.value = 50; 
         showToast("BÁN KÍNH BẢO MẬT TỐI THIỂU LÀ 50M!", "error");
+        isSavingRadius = false; // Mở khóa
         return; 
     }
 
     pendingRadius = val;
 
     if (currentSession && currentSession.code) {
-        const btn = (window.event && window.event.type === 'click') 
-                    ? window.event.currentTarget 
-                    : document.querySelector('button[onclick="saveRadiusSettings()"]');
+        const btn = document.querySelector('button[onclick="queueSaveRadius()"]');
 
         try {
             await rdb.ref('dynamic_attendance/sessions/' + currentSession.code).update({
@@ -3392,9 +3427,16 @@ async function saveRadiusSettings() {
             showToast(`ĐÃ CẬP NHẬT BÁN KÍNH: ${val}M`, "success");
             
             if (btn) {
-                btn.innerHTML = "ĐÃ LƯU";
+                btn.innerHTML = "✓ ĐÃ LƯU";
                 btn.style.background = "#10b981";
-                setTimeout(() => { btn.innerHTML = "LƯU"; btn.style.background = ""; }, 1000);
+                btn.style.color = "white";
+                setTimeout(() => { 
+                    if (btn) {
+                        btn.innerHTML = "LƯU"; 
+                        btn.style.background = ""; 
+                        btn.style.color = "";
+                    }
+                }, 1200);
             }
         } catch (e) {
             showToast("Lỗi kết nối máy chủ!", "error");
@@ -3402,6 +3444,11 @@ async function saveRadiusSettings() {
     } else {
         showToast(`ĐÃ GHI NHẬN ${val}M. BẤM KÍCH HOẠT ĐỂ ÁP DỤNG.`, "info");
     }
+    
+    // Mở khóa sau 300ms (để debounce các lần gọi liên tiếp)
+    setTimeout(() => {
+        isSavingRadius = false;
+    }, 300);
 }
 
 function getGpsErrorMessage(err) {
@@ -4282,6 +4329,50 @@ function stopTimer() {
     
     updateTimeUI();
     showToast("⏸️ ĐÃ DỪNG THỜI GIAN", "info");
+}
+
+// === TIẾP TỤC THỜI GIAN (RESUME) ===
+function resumeTimer() {
+    // Kiểm tra nếu đang ở chế độ mở khóa
+    if (timeLimit.isUnlocked) {
+        return showToast("🔓 HỆ THỐNG ĐANG Ở CHẾ ĐỘ MỞ KHÓA! Không cần tiếp tục.", "info");
+    }
+    
+    // Kiểm tra nếu chưa từng chạy
+    if (!timeLimit.isRunning && timeLimit.remainingSeconds === 0 && timeLimit.totalSeconds === 0) {
+        return showToast("⏳ HỆ THỐNG CHƯA KÍCH HOẠT THỜI GIAN! Hãy bấm 'TÙY CHỈNH' để đặt thời gian.", "info");
+    }
+    
+    // Kiểm tra nếu đã hết giờ
+    if (timeLimit.remainingSeconds <= 0 && timeLimit.totalSeconds > 0) {
+        return showToast("⏰ THỜI GIAN ĐÃ HẾT! Vui lòng gia hạn hoặc mở khóa.", "error");
+    }
+    
+    // Kiểm tra nếu đang chạy
+    if (timeLimit.isRunning && !timeLimit.isPaused) {
+        return showToast("⏱️ THỜI GIAN ĐANG CHẠY! Không cần tiếp tục.", "info");
+    }
+    
+    // Kiểm tra nếu đã dừng (paused)
+    if (timeLimit.isPaused) {
+        // Tiếp tục chạy
+        timeLimit.isPaused = false;
+        timeLimit.isRunning = true;
+        timeLimit.startTime = Date.now() - (timeLimit.totalSeconds - timeLimit.remainingSeconds) * 1000;
+        
+        // Lưu lên Firebase
+        saveTimeStateToFirebase();
+        
+        // Cập nhật UI
+        updateTimeUI();
+        
+        // Bắt đầu timer
+        startTimer();
+        
+        showToast("▶️ ĐÃ TIẾP TỤC THỜI GIAN", "success");
+    } else {
+        showToast("⚠️ Không thể tiếp tục. Vui lòng kiểm tra trạng thái.", "info");
+    }
 }
 
 // Mở khóa thời gian (vô hạn)

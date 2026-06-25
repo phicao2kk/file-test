@@ -1901,7 +1901,7 @@ async function submitAttendance(event) {
                     
                     console.log("⚠️ PHÁT HIỆN GIAN LẬN:", userName, "-", Math.round(dist), "m");
                     
-                    // 📝 GHI NHẬN GIAN LẬN - DÙNG userSession.code
+                    // 📝 GHI NHẬN GIAN LẬN - CHỈ GỌI 1 LẦN
                     await addFraudRecordFromUser(userName, dist, time, userSession.code, `Ngoài bán kính ${allowedRadius}m`);
                     
                     // ✅ CHỈ HIỂN THỊ 1 THÔNG BÁO DUY NHẤT CHO NGƯỜI DÙNG

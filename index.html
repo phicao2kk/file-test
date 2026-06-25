@@ -2772,6 +2772,51 @@ async function restoreSession(code) {
 
         toggleAdminFormLock(true);
 
+        // === KHÔI PHỤC CẤU HÌNH GPS ===
+        const gpsToggle = document.getElementById('a-require-location');
+        const radiusContainer = document.getElementById('radius-setting-container');
+        const fraudBtnContainer = document.getElementById('fraud-btn-container');
+        
+        if (gpsToggle) {
+            // Khôi phục trạng thái GPS
+            gpsToggle.checked = currentSession.requireLocation || false;
+            
+            // Cập nhật bán kính
+            const radiusInput = document.getElementById('a-location-radius');
+            if (radiusInput && currentSession.locationRadius) {
+                radiusInput.value = currentSession.locationRadius;
+            }
+            
+            // HIỆN/ẨN NÚT DỮ LIỆU GIAN LẬN
+            if (fraudBtnContainer) {
+                if (currentSession.requireLocation) {
+                    fraudBtnContainer.classList.remove('hidden');
+                    fraudBtnContainer.classList.add('animate-in', 'fade-in', 'duration-300');
+                } else {
+                    fraudBtnContainer.classList.add('hidden');
+                    fraudBtnContainer.classList.remove('animate-in', 'fade-in', 'duration-300');
+                }
+            }
+            
+            // Cập nhật bán kính container
+            if (radiusContainer) {
+                if (currentSession.requireLocation) {
+                    radiusContainer.style.opacity = "1";
+                    radiusContainer.style.pointerEvents = "auto";
+                } else {
+                    radiusContainer.style.opacity = "0.5";
+                    radiusContainer.style.pointerEvents = "none";
+                }
+            }
+        }
+
+        // === KHÔI PHỤC DỮ LIỆU GIAN LẬN ===
+        // Load dữ liệu gian lận từ Firebase
+        loadFraudDataFromFirebase(code);
+        
+        // Lắng nghe gian lận real-time
+        setupFraudListener(code);
+
         // Reset trạng thái thời gian khi khôi phục phiên
         resetTimeLimitState();
         updateTimeUI();
@@ -2781,6 +2826,57 @@ async function restoreSession(code) {
     } else {
         showToast("Không tìm thấy dữ liệu sự kiện!", "error");
     }
+}
+
+// === TẢI DỮ LIỆU GIAN LẬN TỪ FIREBASE ===
+function loadFraudDataFromFirebase(code) {
+    if (!code) return;
+    
+    const fraudRef = rdb.ref('dynamic_attendance/fraud/' + code);
+    
+    fraudRef.once('value').then(snap => {
+        if (snap.exists()) {
+            const data = snap.val();
+            const records = Object.values(data);
+            
+            // Merge với dữ liệu local
+            const existingIds = new Set(fraudData.map(r => r.id));
+            let newRecords = [];
+            
+            records.forEach(record => {
+                if (!existingIds.has(record.id)) {
+                    newRecords.push(record);
+                }
+            });
+            
+            if (newRecords.length > 0) {
+                fraudData = [...newRecords, ...fraudData];
+                // Giới hạn số lượng
+                if (fraudData.length > 1000) {
+                    fraudData = fraudData.slice(0, 1000);
+                }
+                
+                // Lưu vào localStorage
+                try {
+                    localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
+                } catch (e) {}
+                
+                // Cập nhật UI
+                updateFraudBadge();
+                
+                // Cập nhật modal nếu đang mở
+                const modal = document.getElementById('fraud-data-modal');
+                if (!modal.classList.contains('hidden')) {
+                    renderFraudTable();
+                    updateFraudStats();
+                }
+                
+                console.log("📂 Đã tải dữ liệu gian lận từ Firebase:", newRecords.length, "bản ghi mới");
+            }
+        }
+    }).catch(err => {
+        console.warn("Không thể tải dữ liệu gian lận từ Firebase:", err);
+    });
 }
 
 function resetEventForm() {
@@ -2827,6 +2923,12 @@ function resetEventForm() {
     if (radiusContainer) {
         radiusContainer.style.opacity = "0.5";
         radiusContainer.style.pointerEvents = "none";
+    }
+    
+    // Dừng lắng nghe gian lận cũ
+    if (fraudListenerRef && currentSession && currentSession.code) {
+        rdb.ref('dynamic_attendance/fraud/' + currentSession.code).off();
+        fraudListenerRef = null;
     }
     
     showToast("Giao diện đã được làm sạch!", "info");
@@ -3190,18 +3292,49 @@ function setupFraudListener(code) {
     // Tạo một node riêng để lưu gian lận
     const fraudRef = rdb.ref('dynamic_attendance/fraud/' + code);
     
-    isFirstLoad = true;
+    // Dừng listener cũ nếu có
+    if (fraudListenerRef) {
+        fraudRef.off();
+        fraudListenerRef = null;
+    }
+    
+    let isFirstLoad = true;
     fraudRef.once('value').then(() => {
         setTimeout(() => { isFirstLoad = false; }, 2000);
     });
 
-    fraudRef.on('child_added', (snap) => {
+    fraudListenerRef = fraudRef.on('child_added', (snap) => {
         if (isFirstLoad || isMuted) return;
 
         const data = snap.val();
         const userName = data.name || "Không xác định";
         const distance = data.distance || "?";
         const reason = data.reason || "Ngoài bán kính";
+
+        // Kiểm tra trùng lặp
+        const exists = fraudData.some(r => r.id === data.id);
+        if (!exists) {
+            // Thêm vào danh sách
+            fraudData.unshift(data);
+            if (fraudData.length > 1000) {
+                fraudData = fraudData.slice(0, 1000);
+            }
+            
+            // Lưu vào localStorage
+            try {
+                localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
+            } catch (e) {}
+            
+            // Cập nhật badge
+            updateFraudBadge();
+            
+            // Cập nhật modal nếu đang mở
+            const modal = document.getElementById('fraud-data-modal');
+            if (!modal.classList.contains('hidden')) {
+                renderFraudTable();
+                updateFraudStats();
+            }
+        }
 
         // 🔴 THÔNG BÁO MÀU ĐỎ CHO ADMIN
         showToast(`🚨 GIAN LẬN: ${userName.toUpperCase()} - cách ${distance}m (${reason})`, "error");

@@ -2811,8 +2811,7 @@ async function restoreSession(code) {
         }
 
         // === KHÔI PHỤC DỮ LIỆU GIAN LẬN ===
-        // Load dữ liệu gian lận từ Firebase
-        loadFraudDataFromFirebase(code);
+        loadFraudDataForSession(code);
         
         // Lắng nghe gian lận real-time
         setupFraudListener(code);
@@ -3287,58 +3286,136 @@ function setupRealtimeNotify(code) {
     });
 }
 
-// === LẮNG NGHE GIAN LẬN TỪ FIREBASE ===
+// === LẮNG NGHE GIAN LẬN TỪ FIREBASE (REAL-TIME) ===
 function setupFraudListener(code) {
-    // Tạo một node riêng để lưu gian lận
+    if (!code) return;
+    
     const fraudRef = rdb.ref('dynamic_attendance/fraud/' + code);
     
-    // Dừng listener cũ nếu có
+    // Dừng listener cũ
     if (fraudListenerRef) {
         fraudRef.off();
         fraudListenerRef = null;
     }
     
     let isFirstLoad = true;
-    fraudRef.once('value').then(() => {
-        setTimeout(() => { isFirstLoad = false; }, 2000);
+    
+    // Load dữ liệu cũ
+    fraudRef.once('value').then(snap => {
+        if (snap.exists()) {
+            const data = snap.val();
+            const records = Object.values(data);
+            
+            // Merge với local
+            const existingIds = new Set(fraudData.map(r => r.id));
+            let newRecords = [];
+            
+            records.forEach(record => {
+                if (!existingIds.has(record.id)) {
+                    newRecords.push(record);
+                }
+            });
+            
+            if (newRecords.length > 0) {
+                fraudData = [...newRecords, ...fraudData];
+                if (fraudData.length > 1000) {
+                    fraudData = fraudData.slice(0, 1000);
+                }
+                try {
+                    localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
+                } catch (e) {}
+                
+                updateFraudBadge();
+                updateFraudUI();
+            }
+        }
+        isFirstLoad = false;
+    }).catch(err => {
+        console.warn("Lỗi tải dữ liệu gian lận:", err);
+        isFirstLoad = false;
     });
 
+    // Lắng nghe dữ liệu mới (real-time)
     fraudListenerRef = fraudRef.on('child_added', (snap) => {
-        if (isFirstLoad || isMuted) return;
+        if (isFirstLoad) return;
 
         const data = snap.val();
-        const userName = data.name || "Không xác định";
-        const distance = data.distance || "?";
-        const reason = data.reason || "Ngoài bán kính";
-
+        if (!data) return;
+        
         // Kiểm tra trùng lặp
         const exists = fraudData.some(r => r.id === data.id);
         if (!exists) {
-            // Thêm vào danh sách
+            // Thêm vào đầu danh sách
             fraudData.unshift(data);
             if (fraudData.length > 1000) {
                 fraudData = fraudData.slice(0, 1000);
             }
             
-            // Lưu vào localStorage
+            // Lưu local
             try {
                 localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
             } catch (e) {}
             
-            // Cập nhật badge
+            // Cập nhật UI
             updateFraudBadge();
+            updateFraudUI();
             
-            // Cập nhật modal nếu đang mở
-            const modal = document.getElementById('fraud-data-modal');
-            if (!modal.classList.contains('hidden')) {
-                renderFraudTable();
-                updateFraudStats();
+            // 🔴 THÔNG BÁO CHO ADMIN
+            if (!isMuted) {
+                const userName = data.name || "Không xác định";
+                const distance = data.distance || "?";
+                const reason = data.reason || "Ngoài bán kính";
+                showToast(`🚨 GIAN LẬN: ${userName.toUpperCase()} - cách ${distance}m (${reason})`, "error");
+                playAlertSound();
             }
         }
+    });
+}
 
-        // 🔴 THÔNG BÁO MÀU ĐỎ CHO ADMIN
-        showToast(`🚨 GIAN LẬN: ${userName.toUpperCase()} - cách ${distance}m (${reason})`, "error");
-        playAlertSound(); // Âm thanh báo động khác
+// === CẬP NHẬT UI GIAN LẬN ===
+function updateFraudUI() {
+    const modal = document.getElementById('fraud-data-modal');
+    if (!modal.classList.contains('hidden')) {
+        renderFraudTable();
+        updateFraudStats();
+    }
+}
+
+// === TẢI DỮ LIỆU GIAN LẬN KHI RESTORE SESSION ===
+function loadFraudDataForSession(code) {
+    if (!code) return;
+    
+    const fraudRef = rdb.ref('dynamic_attendance/fraud/' + code);
+    fraudRef.once('value').then(snap => {
+        if (snap.exists()) {
+            const data = snap.val();
+            const records = Object.values(data);
+            
+            // Reset fraudData và load từ Firebase
+            fraudData = records;
+            if (fraudData.length > 1000) {
+                fraudData = fraudData.slice(0, 1000);
+            }
+            
+            // Lưu local
+            try {
+                localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
+            } catch (e) {}
+            
+            // Cập nhật UI
+            updateFraudBadge();
+            updateFraudUI();
+            console.log("📂 Đã tải dữ liệu gian lận:", fraudData.length, "bản ghi");
+        } else {
+            fraudData = [];
+            try {
+                localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
+            } catch (e) {}
+            updateFraudBadge();
+            updateFraudUI();
+        }
+    }).catch(err => {
+        console.warn("Không thể tải dữ liệu gian lận:", err);
     });
 }
 
@@ -5212,27 +5289,35 @@ function addFraudRecord(name, distance, time, reason = 'Ngoài bán kính') {
         reason: reason,
         timestamp: Date.now()
     };
-    fraudData.unshift(record);
     
-    // Giới hạn số lượng
+    // 📤 LƯU LÊN FIREBASE TRƯỚC
+    if (currentSession && currentSession.code) {
+        const fraudRef = rdb.ref('dynamic_attendance/fraud/' + currentSession.code);
+        fraudRef.push(record).then(() => {
+            console.log("✅ Đã lưu gian lận lên Firebase:", record);
+        }).catch(err => {
+            console.warn("Không thể lưu gian lận lên Firebase:", err);
+            // Nếu lỗi, lưu local
+            saveFraudLocal(record);
+        });
+    } else {
+        // Nếu chưa có session, lưu local
+        saveFraudLocal(record);
+    }
+    
+    // Cập nhật badge ngay lập tức
+    updateFraudBadge();
+}
+
+// === LƯU LOCAL (HÀM PHỤ TRỢ) ===
+function saveFraudLocal(record) {
+    fraudData.unshift(record);
     if (fraudData.length > 1000) {
         fraudData = fraudData.slice(0, 1000);
     }
-    
-    // Lưu vào localStorage
     try {
         localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
     } catch (e) {}
-    
-    // 📤 LƯU LÊN FIREBASE ĐỂ ADMIN NHẬN THÔNG BÁO
-    if (currentSession && currentSession.code) {
-        rdb.ref('dynamic_attendance/fraud/' + currentSession.code).push(record).catch(err => {
-            console.warn("Không thể lưu gian lận lên Firebase:", err);
-        });
-    }
-    
-    // Cập nhật badge
-    updateFraudBadge();
     
     // Cập nhật UI nếu modal đang mở
     const modal = document.getElementById('fraud-data-modal');
@@ -5240,8 +5325,6 @@ function addFraudRecord(name, distance, time, reason = 'Ngoài bán kính') {
         renderFraudTable();
         updateFraudStats();
     }
-    
-    console.log("✅ Đã thêm gian lận:", record);
 }
 
 // === CẬP NHẬT BADGE ===
@@ -5422,13 +5505,34 @@ function clearFraudData() {
     }
     
     showConfirm("XÁC NHẬN: Bạn muốn xóa toàn bộ dữ liệu gian lận?", () => {
-        fraudData = [];
-        try {
-            localStorage.removeItem('scheck_fraud_data');
-        } catch (e) {}
-        renderFraudTable();
-        updateFraudStats();
-        showToast("Đã xóa dữ liệu gian lận!", "success");
+        // Xóa trên Firebase
+        if (currentSession && currentSession.code) {
+            rdb.ref('dynamic_attendance/fraud/' + currentSession.code).remove()
+                .then(() => {
+                    fraudData = [];
+                    try {
+                        localStorage.removeItem('scheck_fraud_data');
+                    } catch (e) {}
+                    renderFraudTable();
+                    updateFraudStats();
+                    updateFraudBadge();
+                    showToast("Đã xóa dữ liệu gian lận!", "success");
+                })
+                .catch(err => {
+                    console.warn("Không thể xóa gian lận trên Firebase:", err);
+                    showToast("Lỗi xóa dữ liệu!", "error");
+                });
+        } else {
+            // Xóa local
+            fraudData = [];
+            try {
+                localStorage.removeItem('scheck_fraud_data');
+            } catch (e) {}
+            renderFraudTable();
+            updateFraudStats();
+            updateFraudBadge();
+            showToast("Đã xóa dữ liệu gian lận!", "success");
+        }
     });
 }
 

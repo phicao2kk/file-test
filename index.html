@@ -1899,6 +1899,9 @@ async function submitAttendance(event) {
     }
 
     // === KIỂM TRA GPS - PHÁT HIỆN GIAN LẬN ===
+    let isFraud = false;
+    let fraudDistance = 0;
+    
     if (userSession && userSession.requireLocation === true) {
         try {
             const pos = await new Promise((res, rej) => 
@@ -1915,23 +1918,8 @@ async function submitAttendance(event) {
                 console.log("📍 Khoảng cách:", dist, "m, Bán kính:", allowedRadius, "m");
                 
                 if (dist > allowedRadius) {
-                    // 🚨 PHÁT HIỆN GIAN LẬN
-                    const time = new Date().toLocaleString('vi-VN');
-                    
-                    console.log("⚠️ PHÁT HIỆN GIAN LẬN:", userName, "-", Math.round(dist), "m");
-                    
-                    // 📝 GHI NHẬN GIAN LẬN - CHỈ GỌI 1 LẦN
-                    await addFraudRecordFromUser(userName, dist, time, userSession.code, `Ngoài bán kính ${allowedRadius}m`);
-                    
-                    // ✅ CHỈ HIỂN THỊ 1 THÔNG BÁO DUY NHẤT CHO NGƯỜI DÙNG
-                    showToast(`⚠️ Bạn đang ở ngoài khu vực cho phép (${Math.round(dist)}m)`, "error");
-                    
-                    if (btn) { 
-                        btn.disabled = false; 
-                        btn.innerHTML = 'Xác nhận'; 
-                    }
-                    isProcessing = false;
-                    return; // ❌ THOÁT - KHÔNG ĐIỂM DANH
+                    isFraud = true;
+                    fraudDistance = dist;
                 }
             }
         } catch (e) {
@@ -1940,6 +1928,27 @@ async function submitAttendance(event) {
             isProcessing = false;
             return;
         }
+    }
+
+    // === NẾU GIAN LẬN: GHI NHẬN 1 LẦN DUY NHẤT VÀ THOÁT ===
+    if (isFraud) {
+        const time = new Date().toLocaleString('vi-VN');
+        const allowedRadius = Number(userSession.locationRadius) || 50;
+        
+        console.log("⚠️ PHÁT HIỆN GIAN LẬN:", userName, "-", Math.round(fraudDistance), "m");
+        
+        // 📝 GHI NHẬN GIAN LẬN - CHỈ GỌI 1 LẦN
+        await addFraudRecordFromUser(userName, fraudDistance, time, userSession.code, `Ngoài bán kính ${allowedRadius}m`);
+        
+        // ✅ CHỈ HIỂN THỊ 1 THÔNG BÁO DUY NHẤT CHO NGƯỜI DÙNG
+        showToast(`⚠️ Bạn đang ở ngoài khu vực cho phép (${Math.round(fraudDistance)}m)`, "error");
+        
+        if (btn) { 
+            btn.disabled = false; 
+            btn.innerHTML = 'Xác nhận'; 
+        }
+        isProcessing = false;
+        return; // ❌ THOÁT - KHÔNG ĐIỂM DANH
     }
 
     // ✅ ĐIỂM DANH THÀNH CÔNG (CHỈ KHI KHÔNG GIAN LẬN)
@@ -1999,6 +2008,17 @@ async function submitAttendance(event) {
 
 // === THÊM DỮ LIỆU GIAN LẬN TỪ NGƯỜI DÙNG (KHÔNG CẦN currentSession) ===
 async function addFraudRecordFromUser(name, distance, time, sessionCode, reason = 'Ngoài bán kính') {
+    // 🔍 KIỂM TRA TRÙNG LẶP TRONG 5 GIÂY
+    const recentFraud = fraudData.filter(r => {
+        const timeDiff = Date.now() - r.timestamp;
+        return r.name === name && Math.abs(r.distance - Math.round(distance)) < 10 && timeDiff < 5000;
+    });
+    
+    if (recentFraud.length > 0) {
+        console.log("⏭️ Bỏ qua ghi nhận trùng lặp trong 5s:", name);
+        return;
+    }
+    
     const record = {
         id: Date.now() + Math.random().toString(36).substr(2, 5),
         name: name || 'Không xác định',
@@ -2009,7 +2029,6 @@ async function addFraudRecordFromUser(name, distance, time, sessionCode, reason 
     };
     
     console.log("📝 Đang ghi nhận gian lận từ người dùng:", record);
-    console.log("📤 Session code:", sessionCode);
     
     // Lưu local trước
     fraudData.unshift(record);
@@ -2039,7 +2058,6 @@ async function addFraudRecordFromUser(name, distance, time, sessionCode, reason 
             console.log("✅ Đã lưu gian lận lên Firebase thành công:", record);
         } catch (err) {
             console.error("❌ LỖI KHI LƯU LÊN FIREBASE:", err);
-            // Không hiển thị lỗi cho người dùng (chỉ log)
         }
     } else {
         console.warn("⚠️ Không có session code để lưu gian lận lên Firebase");
@@ -3522,7 +3540,6 @@ function setupFraudListener(code) {
         return;
     }
     
-    // ✅ SỬA: bỏ dynamic_attendance/
     const fraudRef = rdb.ref('fraud/' + code);
     console.log("🔍 Đang lắng nghe gian lận tại:", 'fraud/' + code);
     
@@ -3543,25 +3560,23 @@ function setupFraudListener(code) {
             const records = Object.values(data);
             console.log("📊 Số bản ghi từ Firebase:", records.length);
             
-            // Reset và load từ Firebase
-            fraudData = records;
-            if (fraudData.length > 1000) {
-                fraudData = fraudData.slice(0, 1000);
-            }
-            try {
-                localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
-            } catch (e) {}
+            // ⚠️ THAY ĐỔI: Merge dữ liệu, KHÔNG reset
+            const existingIds = new Set(fraudData.map(r => r.id));
+            const newRecords = records.filter(r => !existingIds.has(r.id));
             
-            updateFraudBadge();
-            updateFraudUI();
-        } else {
-            console.log("📂 Không có dữ liệu gian lận trên Firebase");
-            fraudData = [];
-            try {
-                localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
-            } catch (e) {}
-            updateFraudBadge();
-            updateFraudUI();
+            if (newRecords.length > 0) {
+                fraudData = [...newRecords, ...fraudData];
+                if (fraudData.length > 1000) {
+                    fraudData = fraudData.slice(0, 1000);
+                }
+                try {
+                    localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
+                } catch (e) {}
+                
+                updateFraudBadge();
+                updateFraudUI();
+                console.log("📂 Đã thêm", newRecords.length, "bản ghi mới");
+            }
         }
         isFirstLoad = false;
     }).catch(err => {
@@ -3594,16 +3609,13 @@ function setupFraudListener(code) {
                 fraudData = fraudData.slice(0, 1000);
             }
             
-            // Lưu local
             try {
                 localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
             } catch (e) {}
             
-            // Cập nhật UI
             updateFraudBadge();
             updateFraudUI();
             
-            // 🔴 THÔNG BÁO CHI TIẾT CHO ADMIN
             if (!isMuted) {
                 const userName = data.name || "Không xác định";
                 const distance = data.distance || "?";
@@ -5578,6 +5590,17 @@ function closeFraudModal(event) {
 
 // === THÊM DỮ LIỆU GIAN LẬN ===
 function addFraudRecord(name, distance, time, reason = 'Ngoài bán kính') {
+    // 🔍 KIỂM TRA TRÙNG LẶP TRONG 5 GIÂY
+    const recentFraud = fraudData.filter(r => {
+        const timeDiff = Date.now() - r.timestamp;
+        return r.name === name && Math.abs(r.distance - Math.round(distance)) < 10 && timeDiff < 5000;
+    });
+    
+    if (recentFraud.length > 0) {
+        console.log("⏭️ Bỏ qua ghi nhận trùng lặp (admin):", name);
+        return;
+    }
+    
     const record = {
         id: Date.now() + Math.random().toString(36).substr(2, 5),
         name: name || 'Không xác định',

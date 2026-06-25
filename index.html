@@ -5505,7 +5505,7 @@ function updateFraudStats() {
     document.getElementById('fraud-far').innerText = far;
 }
 
-// === XUẤT DỮ LIỆU GIAN LẬN RA EXCEL ===
+// === XUẤT DỮ LIỆU GIAN LẬN RA EXCEL (FORM GIỐNG BÁO CÁO ĐIỂM DANH) ===
 async function exportFraudData() {
     if (fraudData.length === 0) {
         return showToast("Không có dữ liệu gian lận để xuất!", "info");
@@ -5516,49 +5516,99 @@ async function exportFraudData() {
     try {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('GianLan');
+        worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2, activeCell: 'A4' }];
         
-        // Header
-        const headers = ['STT', 'Họ tên', 'Khoảng cách (m)', 'Trạng thái', 'Thời gian', 'Lý do'];
-        const headerRow = worksheet.addRow(headers);
-        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
-        headerRow.eachCell((cell) => {
+        let currentRow = 1;
+        const totalCols = 6; // STT, Họ tên, Khoảng cách, Trạng thái, Thời gian, Lý do
+        
+        const mergeAndSet = (startRow, startCol, endRow, endCol, value, font, align = 'center') => {
+            worksheet.mergeCells(startRow, startCol, endRow, endCol);
+            const cell = worksheet.getCell(startRow, startCol);
+            cell.value = value;
+            cell.font = { name: 'Times New Roman', ...font };
+            cell.alignment = { vertical: 'middle', horizontal: align };
+        };
+        
+        const setHeaderCell = (row, col, value, bgColor) => {
+            const cell = worksheet.getCell(row, col);
+            cell.value = value;
+            cell.font = { name: 'Times New Roman', bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
-            cell.border = {
-                top: { style: 'thin' }, left: { style: 'thin' },
-                bottom: { style: 'thin' }, right: { style: 'thin' }
-            };
-        });
+            cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        };
         
-        // Dữ liệu
+        const setDataCell = (row, col, value, color = 'FF000000') => {
+            const cell = worksheet.getCell(row, col);
+            cell.value = value;
+            cell.font = { name: 'Times New Roman', size: 11, color: { argb: color } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        };
+        
+        // === TIÊU ĐỀ CHÍNH - MÀU ĐỎ ===
+        mergeAndSet(1, 1, 1, totalCols, "DỮ LIỆU GIAN LẬN", { size: 18, bold: true, color: { argb: 'FFDC2626' } });
+        mergeAndSet(2, 1, 2, totalCols, "HỆ THỐNG ĐIỂM DANH TỰ ĐỘNG", { size: 14, bold: true, color: { argb: 'FFDC2626' } });
+        
+        // === DÒNG THỐNG KÊ ===
+        const totalFraud = fraudData.length;
+        const nearCount = fraudData.filter(r => r.distance !== undefined && r.distance <= 50).length;
+        const farCount = totalFraud - nearCount;
+        
+        currentRow = 4;
+        mergeAndSet(currentRow, 1, currentRow, totalCols, 
+            `📊 TỔNG: ${totalFraud} | TRONG BÁN KÍNH: ${nearCount} | NGOÀI BÁN KÍNH: ${farCount}`, 
+            { size: 11, bold: true, color: { argb: 'FFDC2626' } }, 'left');
+        currentRow++;
+        
+        // === HEADER - MÀU ĐỎ ===
+        const headers = ['STT', 'Họ tên', 'Khoảng cách (m)', 'Trạng thái', 'Thời gian', 'Lý do'];
+        for (let i = 0; i < headers.length; i++) {
+            setHeaderCell(currentRow, i + 1, headers[i], 'FFDC2626');
+        }
+        currentRow++;
+        
+        // === DỮ LIỆU ===
         fraudData.forEach((record, index) => {
             let status = '';
+            let color = 'FF000000';
+            
             if (record.distance !== undefined && record.distance !== null) {
-                if (record.distance <= 50) status = '✅ Gần vị trí điểm danh';
-                else if (record.distance <= 500) status = '⚠️ Khá xa';
-                else status = '❌ Quá xa';
+                if (record.distance <= 50) {
+                    status = '✅ Gần vị trí điểm danh';
+                    color = 'FF10B981'; // Xanh lá
+                } else if (record.distance <= 500) {
+                    status = '⚠️ Khá xa';
+                    color = 'FFF59E0B'; // Vàng
+                } else {
+                    status = '❌ Quá xa';
+                    color = 'FFDC2626'; // Đỏ
+                }
             } else {
                 status = 'Không xác định';
+                color = 'FF94A3B8'; // Xám
             }
             
-            const row = worksheet.addRow([
-                index + 1,
-                record.name || 'Không xác định',
-                record.distance !== undefined && record.distance !== null ? record.distance : 'N/A',
-                status,
-                record.time || '--',
-                record.reason || 'Ngoài bán kính'
-            ]);
-            row.eachCell((cell) => {
-                cell.alignment = { vertical: 'middle', horizontal: 'center' };
-                cell.border = {
-                    top: { style: 'thin' }, left: { style: 'thin' },
-                    bottom: { style: 'thin' }, right: { style: 'thin' }
-                };
-            });
+            setDataCell(currentRow, 1, index + 1);
+            setDataCell(currentRow, 2, record.name || 'Không xác định');
+            setDataCell(currentRow, 3, record.distance !== undefined && record.distance !== null ? record.distance : 'N/A');
+            setDataCell(currentRow, 4, status, color);
+            setDataCell(currentRow, 5, record.time || '--');
+            setDataCell(currentRow, 6, record.reason || 'Ngoài bán kính');
+            currentRow++;
         });
         
-        // Set width
+        // === DÒNG TỔNG KẾT ===
+        mergeAndSet(currentRow, 1, currentRow, totalCols, 
+            `Tổng số bản ghi gian lận: ${fraudData.length}`, 
+            { size: 10, italic: true, bold: true, color: { argb: 'FFDC2626' } }, 'center');
+        currentRow++;
+        
+        mergeAndSet(currentRow, 1, currentRow, totalCols, 
+            `Báo cáo được xuất từ hệ thống S-CHECK Pro vào lúc ${new Date().toLocaleString('vi-VN')}`, 
+            { size: 10, italic: true, color: { argb: 'FF7F7F7F' } }, 'center');
+        
+        // === SET ĐỘ RỘNG CỘT ===
         worksheet.getColumn(1).width = 8;
         worksheet.getColumn(2).width = 25;
         worksheet.getColumn(3).width = 18;
@@ -5566,10 +5616,11 @@ async function exportFraudData() {
         worksheet.getColumn(5).width = 22;
         worksheet.getColumn(6).width = 25;
         
+        // === TẠO FILE ===
         const buffer = await workbook.xlsx.writeBuffer();
         const title = currentSession ? currentSession.title : 'GianLan';
-        saveAs(new Blob([buffer]), `Báo cáo gian lận_${title}.xlsx`);
-        showToast("Xuất báo cáo thành công!", "success");
+        saveAs(new Blob([buffer]), `Dữ liệu gian lận_${title}.xlsx`);
+        showToast("Xuất báo cáo gian lận thành công!", "success");
         
     } catch (e) {
         console.error(e);

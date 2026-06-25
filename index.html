@@ -1786,7 +1786,17 @@ function finishActivation(code, title) {
 // 2. GỬI ĐIỂM DANH
 // SỬA HÀM submitAttendance() - THÊM PHẦN KIỂM TRA THỜI GIAN TỪ FIREBASE
 
+// === THÊM BIẾN NÀY VÀO ĐẦU FILE (sau các biến toàn cục khác) ===
+let isProcessing = false;
+
+// === SỬA HÀM submitAttendance() ===
 async function submitAttendance(event) {
+    // ✅ CHẶN GỌI TRÙNG
+    if (isProcessing) {
+        console.log("⏳ Đang xử lý, bỏ qua lần gọi trùng");
+        return;
+    }
+    
     if (isAttendanceSuccess) {
         console.log("✅ Đã điểm danh, bỏ qua");
         return;
@@ -1798,9 +1808,13 @@ async function submitAttendance(event) {
         event.stopImmediatePropagation();
     }
     
+    // ✅ ĐÁNH DẤU ĐANG XỬ LÝ
+    isProcessing = true;
+    
     const overlay = document.getElementById('success-overlay');
     if (overlay && overlay.style.display === 'flex') {
         console.log("✅ Đã điểm danh thành công, bỏ qua");
+        isProcessing = false;
         return;
     }
     
@@ -1834,16 +1848,19 @@ async function submitAttendance(event) {
                 else if (isPaused) {
                     showToast("⏸️ HỆ THỐNG ĐANG TẠM DỪNG!", "info");
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
+                    isProcessing = false;
                     return;
                 }
                 else if (totalSeconds > 0 && remainingSeconds <= 0) {
                     showToast("⏰ THỜI GIAN ĐIỂM DANH ĐÃ HẾT!", "error");
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
+                    isProcessing = false;
                     return;
                 }
                 else if (!isRunning && !isUnlocked && totalSeconds === 0) {
                     showToast("⏳ ADMIN CHƯA KÍCH HOẠT THỜI GIAN!", "info");
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
+                    isProcessing = false;
                     return;
                 }
                 else if (isRunning && remainingSeconds > 0) {
@@ -1860,6 +1877,7 @@ async function submitAttendance(event) {
     if(vals.some(v => !v)) {
         showToast("Vui lòng điền đủ thông tin!", "info");
         if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
+        isProcessing = false;
         return;
     }
     
@@ -1874,6 +1892,7 @@ async function submitAttendance(event) {
             if (snapshot.exists()) {
                 showToast("BẠN ĐÃ ĐIỂM DANH RỒI!", "error");
                 if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
+                isProcessing = false;
                 return;
             }
         } catch (e) { console.error(e); }
@@ -1911,12 +1930,14 @@ async function submitAttendance(event) {
                         btn.disabled = false; 
                         btn.innerHTML = 'Xác nhận'; 
                     }
+                    isProcessing = false;
                     return; // ❌ THOÁT - KHÔNG ĐIỂM DANH
                 }
             }
         } catch (e) {
             showToast(getGpsErrorMessage(e), "error");
             if (btn) { btn.disabled = false; btn.innerHTML = 'Xác nhận'; }
+            isProcessing = false;
             return;
         }
     }
@@ -1971,6 +1992,9 @@ async function submitAttendance(event) {
         if (step2) step2.style.display = 'block';
         document.body.style.overflow = 'auto';
     }
+    
+    // ✅ KẾT THÚC XỬ LÝ
+    isProcessing = false;
 }
 
 // === THÊM DỮ LIỆU GIAN LẬN TỪ NGƯỜI DÙNG (KHÔNG CẦN currentSession) ===

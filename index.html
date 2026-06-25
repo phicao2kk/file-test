@@ -765,6 +765,77 @@ input[type="number"] {
     transform: translateY(-2px) !important;
 }
 
+        /* Thêm style cho nút "Dữ liệu gian lận" */
+        .btn-fraud-data {
+            background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.2) !important;
+            transition: all 0.3s ease;
+        }
+        .btn-fraud-data:hover {
+            box-shadow: 0 0 50px rgba(239, 68, 68, 0.4) !important;
+            transform: translateY(-2px) !important;
+        }
+        .btn-fraud-data:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* Style cho bảng dữ liệu gian lận */
+        .fraud-table-container {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .fraud-table-container::-webkit-scrollbar {
+            width: 4px;
+        }
+        .fraud-table-container::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 10px;
+        }
+
+        .distance-tag {
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 800;
+            display: inline-block;
+            letter-spacing: 0.5px;
+        }
+        .distance-tag.near {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .distance-tag.far {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .distance-tag.very-far {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .distance-tag.unknown {
+            background: rgba(100, 116, 139, 0.15);
+            color: #94a3b8;
+            border: 1px solid rgba(100, 116, 139, 0.3);
+        }
+
+        /* Animation cho modal */
+        @keyframes fraudSlideIn {
+            from { opacity: 0; transform: scale(0.95) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .fraud-modal-enter {
+            animation: fraudSlideIn 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+        }
+
+        .text-success { color: #10b981; }
+        .text-warning { color: #f59e0b; }
+        .text-danger { color: #ef4444; }
+
     </style>
 </head>
 <body>
@@ -815,7 +886,7 @@ input[type="number"] {
             <i class="fa-solid fa-spinner animate-spin"></i>
             <span class="text-[10px] font-black uppercase">Chờ tín hiệu từ điện thoại...</span>
         </div>
-        <button onclick="closeAnchorModal()" class="w-full py-3 text-[10px] font-black text-slate-500 uppercase">Hủy bỏ</button>
+        <button onclick="closeAnchorModal()" class="w-full py-3 rounded-2xl text-[10px] font-black text-slate-500 hover:text-white hover:bg-white/10 border border-white/10 transition-all uppercase">Hủy bỏ</button>
     </div>
 </div>
 
@@ -1040,7 +1111,7 @@ input[type="number"] {
                 </button>
 
                 <!-- KHU VỰC GPS (Nằm gọn bên trong Card chính) -->
-                <div class="pt-6 border-t border-white/5 space-y-4">
+                <div class="pt-6 border-t border-white/5 space-y-4" id="gps-section">
                     <div class="flex items-center justify-between">
                         <div class="flex flex-col">
                             <span class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Bảo mật GPS</span>
@@ -1062,6 +1133,16 @@ input[type="number"] {
                                 class="w-16 p-2 text-center rounded-xl bg-black/40 border border-white/10 text-[11px] font-black text-indigo-400 outline-none focus:border-indigo-500/50">
                             <button onclick="queueSaveRadius()" class="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white text-[9px] font-black px-3 py-2 rounded-xl border border-indigo-500/30 transition-all">LƯU</button>
                         </div>
+                    </div>
+
+                    <!-- NÚT DỮ LIỆU GIAN LẬN - CHỈ HIỆN KHI BẬT GPS -->
+                    <div id="fraud-btn-container" class="hidden pt-2">
+                        <button onclick="openFraudModal()" 
+                                class="btn-fraud-data w-full py-3 rounded-2xl text-white font-black uppercase text-xs tracking-[2px] shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-shield-halved"></i> DỮ LIỆU GIAN LẬN
+                            <span id="fraud-badge" class="bg-red-500/30 text-red-400 text-[8px] px-2 py-0.5 rounded-full">0</span>
+                        </button>
+                        <p class="text-[7px] text-slate-500 text-center mt-1 uppercase tracking-[1px]">Danh sách các trường hợp điểm danh từ xa bị từ chối</p>
                     </div>
                 </div>
                 
@@ -2702,6 +2783,22 @@ function resetEventForm() {
     resetTimeLimitState();
     updateTimeUI();
     
+    // TẮT GPS VÀ ẨN NÚT DỮ LIỆU GIAN LẬN
+    const gpsToggle = document.getElementById('a-require-location');
+    if (gpsToggle) {
+        gpsToggle.checked = false;
+    }
+    const fraudBtnContainer = document.getElementById('fraud-btn-container');
+    if (fraudBtnContainer) {
+        fraudBtnContainer.classList.add('hidden');
+        fraudBtnContainer.classList.remove('animate-in', 'fade-in', 'duration-300');
+    }
+    const radiusContainer = document.getElementById('radius-setting-container');
+    if (radiusContainer) {
+        radiusContainer.style.opacity = "0.5";
+        radiusContainer.style.pointerEvents = "none";
+    }
+    
     showToast("Giao diện đã được làm sạch!", "info");
 }
 
@@ -3215,7 +3312,17 @@ function getDistance(lat1, lon1, lat2, lon2) {
 async function handleGpsToggle() {
     const toggle = document.getElementById('a-require-location');
     const radiusContainer = document.getElementById('radius-setting-container');
+    const fraudBtnContainer = document.getElementById('fraud-btn-container');
     const isChecked = toggle.checked;
+
+    // HIỆN/ẨN NÚT DỮ LIỆU GIAN LẬN
+    if (isChecked) {
+        fraudBtnContainer.classList.remove('hidden');
+        fraudBtnContainer.classList.add('animate-in', 'fade-in', 'duration-300');
+    } else {
+        fraudBtnContainer.classList.add('hidden');
+        fraudBtnContainer.classList.remove('animate-in', 'fade-in', 'duration-300');
+    }
 
     if (isChecked) {
         radiusContainer.style.opacity = "1";
@@ -3224,6 +3331,13 @@ async function handleGpsToggle() {
         radiusContainer.style.opacity = "0.5";
         radiusContainer.style.pointerEvents = "none";
         showToast("CHẾ ĐỘ TỰ DO: ĐÃ TẮT BẢO MẬT GPS", "info");
+
+        // ẨN NÚT DỮ LIỆU GIAN LẬN
+        const fraudBtnContainer = document.getElementById('fraud-btn-container');
+        if (fraudBtnContainer) {
+            fraudBtnContainer.classList.add('hidden');
+            fraudBtnContainer.classList.remove('animate-in', 'fade-in', 'duration-300');
+        }
 
         if (currentSession && currentSession.code) {
             await rdb.ref('dynamic_attendance/sessions/' + currentSession.code).update({
@@ -3247,9 +3361,22 @@ async function handleGpsToggle() {
                 currentSession.requireLocation = true;
             }
             showToast("TÍN HIỆU GPS: ĐÃ SẴN SÀNG", "success");
+            
+            // HIỆN NÚT KHI GPS THÀNH CÔNG
+            const fraudBtnContainer = document.getElementById('fraud-btn-container');
+            if (fraudBtnContainer) {
+                fraudBtnContainer.classList.remove('hidden');
+                fraudBtnContainer.classList.add('animate-in', 'fade-in', 'duration-300');
+            }
         }, (err) => {
             toggle.checked = false;
             radiusContainer.style.opacity = "0.5";
+            // ẨN NÚT KHI LỖI GPS
+            const fraudBtnContainer = document.getElementById('fraud-btn-container');
+            if (fraudBtnContainer) {
+                fraudBtnContainer.classList.add('hidden');
+                fraudBtnContainer.classList.remove('animate-in', 'fade-in', 'duration-300');
+            }
             showToast(getGpsErrorMessage(err), "error");
         }, { enableHighAccuracy: true });
 
@@ -3257,6 +3384,12 @@ async function handleGpsToggle() {
         if (!currentSession) {
             toggle.checked = false;
             radiusContainer.style.opacity = "0.5";
+            // ẨN NÚT KHI CHƯA CÓ SỰ KIỆN
+            const fraudBtnContainer = document.getElementById('fraud-btn-container');
+            if (fraudBtnContainer) {
+                fraudBtnContainer.classList.add('hidden');
+                fraudBtnContainer.classList.remove('animate-in', 'fade-in', 'duration-300');
+            }
             return showToast("Vui lòng 'Kích hoạt' sự kiện trước khi bật GPS!", "error");
         }
 
@@ -3284,6 +3417,13 @@ async function handleGpsToggle() {
                 });
                 currentSession.requireLocation = true;
 
+                // HIỆN NÚT KHI GPS THÀNH CÔNG
+                const fraudBtnContainer = document.getElementById('fraud-btn-container');
+                if (fraudBtnContainer) {
+                    fraudBtnContainer.classList.remove('hidden');
+                    fraudBtnContainer.classList.add('animate-in', 'fade-in', 'duration-300');
+                }
+
                 anchorRef.off();
             }
         });
@@ -3294,7 +3434,15 @@ function closeAnchorModal() {
     document.getElementById('anchor-qr-modal').classList.add('hidden');
 
     const toggle = document.getElementById('a-require-location');
-    if (toggle) toggle.checked = false;
+    if (toggle) {
+        toggle.checked = false;
+        // ẨN NÚT DỮ LIỆU GIAN LẬN
+        const fraudBtnContainer = document.getElementById('fraud-btn-container');
+        if (fraudBtnContainer) {
+            fraudBtnContainer.classList.add('hidden');
+            fraudBtnContainer.classList.remove('animate-in', 'fade-in', 'duration-300');
+        }
+    }
 
     document.getElementById('anchor-qr-box').innerHTML = "";
 
@@ -4759,6 +4907,376 @@ function restoreTimeStateFromFirebase(code) {
         <button onclick="closeUploadModal()" class="text-[10px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors">Hủy bỏ thao tác</button>
     </div>
 </div>
+
+<!-- MODAL DỮ LIỆU GIAN LẬN (THÊM MỚI) -->
+<div id="fraud-data-modal" class="fixed inset-0 z-[13000] hidden items-center justify-center p-4 modal-backdrop-blur" onclick="closeFraudModal(event)">
+    <div class="glass time-modal-card p-6 lg:p-8 rounded-[40px] max-w-4xl w-full fraud-modal-enter border border-white/10" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-start mb-6">
+            <div>
+                <h3 class="text-2xl font-black uppercase italic text-red-400 flex items-center gap-3">
+                    <i class="fa-solid fa-triangle-exclamation"></i> DỮ LIỆU GIAN LẬN
+                </h3>
+                <p class="text-[9px] text-slate-400 font-bold uppercase tracking-[2px] mt-1">Danh sách các trường hợp điểm danh từ xa đã bị từ chối</p>
+            </div>
+            <button onclick="closeFraudModal()" class="w-8 h-8 flex items-center justify-center bg-white/5 rounded-full text-slate-400 hover:text-white transition-colors">✕</button>
+        </div>
+
+        <!-- Khu vực thống kê -->
+        <div class="grid grid-cols-3 gap-3 mb-6">
+            <div class="bg-white/5 p-3 rounded-xl text-center border border-white/5">
+                <p class="text-[8px] text-slate-500 uppercase font-bold">Tổng bị từ chối</p>
+                <p id="fraud-total" class="text-xl font-black text-red-400">0</p>
+            </div>
+            <div class="bg-white/5 p-3 rounded-xl text-center border border-white/5">
+                <p class="text-[8px] text-slate-500 uppercase font-bold">Trong bán kính</p>
+                <p id="fraud-near" class="text-xl font-black text-emerald-400">0</p>
+            </div>
+            <div class="bg-white/5 p-3 rounded-xl text-center border border-white/5">
+                <p class="text-[8px] text-slate-500 uppercase font-bold">Ngoài bán kính</p>
+                <p id="fraud-far" class="text-xl font-black text-red-400">0</p>
+            </div>
+        </div>
+
+        <!-- Bảng dữ liệu -->
+        <div class="fraud-table-container border border-white/5 rounded-2xl bg-black/20 overflow-auto">
+            <table class="w-full text-left border-separate border-spacing-0">
+                <thead class="text-slate-500 text-[9px] uppercase font-black tracking-widest sticky top-0 bg-[#0f172a] z-10">
+                    <tr>
+                        <th class="px-4 py-3 border-b border-white/5">STT</th>
+                        <th class="px-4 py-3 border-b border-white/5">Họ tên</th>
+                        <th class="px-4 py-3 border-b border-white/5">Khoảng cách</th>
+                        <th class="px-4 py-3 border-b border-white/5">Trạng thái</th>
+                        <th class="px-4 py-3 border-b border-white/5">Thời gian</th>
+                    </tr>
+                </thead>
+                <tbody id="fraud-table-body" class="text-sm">
+                    <!-- JS render -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Nút xuất Excel -->
+        <div class="mt-6 flex gap-3">
+            <button onclick="closeFraudModal()" class="flex-1 py-3 bg-white/5 rounded-xl font-black uppercase text-[10px] text-slate-400 hover:bg-white/10 transition-all">Đóng</button>
+            <button onclick="exportFraudData()" class="flex-1 py-3 bg-red-600 rounded-xl font-black uppercase text-[10px] text-white shadow-lg shadow-red-900/30 active:scale-95 transition-all">
+                <i class="fa-solid fa-file-excel mr-2"></i> Xuất Excel
+            </button>
+            <button onclick="clearFraudData()" class="flex-1 py-3 bg-slate-800 rounded-xl font-black uppercase text-[10px] text-slate-400 hover:bg-slate-700 transition-all">
+                <i class="fa-solid fa-trash mr-2"></i> Xóa
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// === THÊM BIẾN TOÀN CỤC ===
+let fraudData = []; // Lưu trữ dữ liệu gian lận
+let fraudListenerRef = null; // Tham chiếu listener
+
+// === HÀM MỞ MODAL DỮ LIỆU GIAN LẬN ===
+function openFraudModal() {
+    const modal = document.getElementById('fraud-data-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    renderFraudTable();
+    updateFraudStats();
+}
+
+// === HÀM ĐÓNG MODAL ===
+function closeFraudModal(event) {
+    if (event && event.target && event.target.id !== 'fraud-data-modal') return;
+    const modal = document.getElementById('fraud-data-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+// === THÊM DỮ LIỆU GIAN LẬN ===
+function addFraudRecord(name, distance, time, reason = 'Ngoài bán kính') {
+    const record = {
+        id: Date.now() + Math.random().toString(36).substr(2, 5),
+        name: name || 'Không xác định',
+        distance: Math.round(distance),
+        time: time || new Date().toLocaleString('vi-VN'),
+        reason: reason,
+        timestamp: Date.now()
+    };
+    fraudData.unshift(record);
+    
+    // Giới hạn số lượng để tránh tràn bộ nhớ
+    if (fraudData.length > 1000) {
+        fraudData = fraudData.slice(0, 1000);
+    }
+    
+    // Lưu vào localStorage
+    try {
+        localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
+    } catch (e) {}
+    
+    // Cập nhật UI nếu modal đang mở
+    const modal = document.getElementById('fraud-data-modal');
+    if (!modal.classList.contains('hidden')) {
+        renderFraudTable();
+        updateFraudStats();
+    }
+}
+
+// === TẢI DỮ LIỆU GIAN LẬN TỪ LOCALSTORAGE ===
+function loadFraudData() {
+    try {
+        const saved = localStorage.getItem('scheck_fraud_data');
+        if (saved) {
+            fraudData = JSON.parse(saved);
+        }
+    } catch (e) {
+        fraudData = [];
+    }
+}
+
+// === HIỂN THỊ BẢNG DỮ LIỆU GIAN LẬN ===
+function renderFraudTable() {
+    const tbody = document.getElementById('fraud-table-body');
+    if (!tbody) return;
+    
+    if (fraudData.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center py-12 text-slate-500 text-xs font-bold uppercase tracking-widest">
+                    <i class="fa-regular fa-face-smile text-2xl block mb-3"></i>
+                    Chưa có dữ liệu gian lận
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = fraudData.map((record, index) => {
+        let distanceText = '';
+        let tagClass = 'unknown';
+        let statusText = 'Không xác định';
+        
+        if (record.distance !== undefined && record.distance !== null) {
+            const dist = record.distance;
+            if (dist <= 50) {
+                distanceText = `${dist}m`;
+                tagClass = 'near';
+                statusText = '✅ Gần vị trí điểm danh';
+            } else if (dist <= 500) {
+                distanceText = `${dist}m`;
+                tagClass = 'far';
+                statusText = '⚠️ Khá xa';
+            } else {
+                distanceText = `${dist}m`;
+                tagClass = 'very-far';
+                statusText = '❌ Quá xa';
+            }
+        } else {
+            distanceText = 'N/A';
+            tagClass = 'unknown';
+            statusText = 'Không xác định';
+        }
+        
+        return `
+            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                <td class="px-4 py-3 text-slate-400 font-bold text-center">${index + 1}</td>
+                <td class="px-4 py-3 font-bold text-white">${record.name || 'Không xác định'}</td>
+                <td class="px-4 py-3">
+                    <span class="distance-tag ${tagClass}">${distanceText}</span>
+                </td>
+                <td class="px-4 py-3 text-xs font-bold">
+                    <span class="${tagClass === 'near' ? 'text-success' : tagClass === 'far' ? 'text-warning' : 'text-danger'}">
+                        ${statusText}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-slate-400 text-xs font-mono">${record.time || '--'}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// === CẬP NHẬT THỐNG KÊ ===
+function updateFraudStats() {
+    const total = fraudData.length;
+    const near = fraudData.filter(r => r.distance !== undefined && r.distance <= 50).length;
+    const far = total - near;
+    
+    document.getElementById('fraud-total').innerText = total;
+    document.getElementById('fraud-near').innerText = near;
+    document.getElementById('fraud-far').innerText = far;
+}
+
+// === XUẤT DỮ LIỆU GIAN LẬN RA EXCEL ===
+async function exportFraudData() {
+    if (fraudData.length === 0) {
+        return showToast("Không có dữ liệu gian lận để xuất!", "info");
+    }
+    
+    showToast("Đang tạo báo cáo gian lận...", "info");
+    
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('GianLan');
+        
+        // Header
+        const headers = ['STT', 'Họ tên', 'Khoảng cách (m)', 'Trạng thái', 'Thời gian', 'Lý do'];
+        const headerRow = worksheet.addRow(headers);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
+        headerRow.eachCell((cell) => {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = {
+                top: { style: 'thin' }, left: { style: 'thin' },
+                bottom: { style: 'thin' }, right: { style: 'thin' }
+            };
+        });
+        
+        // Dữ liệu
+        fraudData.forEach((record, index) => {
+            let status = '';
+            if (record.distance !== undefined && record.distance !== null) {
+                if (record.distance <= 50) status = '✅ Gần vị trí điểm danh';
+                else if (record.distance <= 500) status = '⚠️ Khá xa';
+                else status = '❌ Quá xa';
+            } else {
+                status = 'Không xác định';
+            }
+            
+            const row = worksheet.addRow([
+                index + 1,
+                record.name || 'Không xác định',
+                record.distance !== undefined && record.distance !== null ? record.distance : 'N/A',
+                status,
+                record.time || '--',
+                record.reason || 'Ngoài bán kính'
+            ]);
+            row.eachCell((cell) => {
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.border = {
+                    top: { style: 'thin' }, left: { style: 'thin' },
+                    bottom: { style: 'thin' }, right: { style: 'thin' }
+                };
+            });
+        });
+        
+        // Set width
+        worksheet.getColumn(1).width = 8;
+        worksheet.getColumn(2).width = 25;
+        worksheet.getColumn(3).width = 18;
+        worksheet.getColumn(4).width = 25;
+        worksheet.getColumn(5).width = 22;
+        worksheet.getColumn(6).width = 25;
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        const title = currentSession ? currentSession.title : 'GianLan';
+        saveAs(new Blob([buffer]), `Báo cáo gian lận_${title}.xlsx`);
+        showToast("Xuất báo cáo thành công!", "success");
+        
+    } catch (e) {
+        console.error(e);
+        showToast("Lỗi xuất file: " + e.message, "error");
+    }
+}
+
+// === XÓA DỮ LIỆU GIAN LẬN ===
+function clearFraudData() {
+    if (fraudData.length === 0) {
+        return showToast("Không có dữ liệu để xóa!", "info");
+    }
+    
+    showConfirm("XÁC NHẬN: Bạn muốn xóa toàn bộ dữ liệu gian lận?", () => {
+        fraudData = [];
+        try {
+            localStorage.removeItem('scheck_fraud_data');
+        } catch (e) {}
+        renderFraudTable();
+        updateFraudStats();
+        showToast("Đã xóa dữ liệu gian lận!", "success");
+    });
+}
+
+// === SỬA HÀM submitAttendance() - THÊM GHI NHẬN GIAN LẬN ===
+// Ghi đè hàm submitAttendance để thêm ghi nhận gian lận
+const originalSubmitAttendance = window.submitAttendance;
+window.submitAttendance = async function(event) {
+    // Gọi hàm gốc để xử lý logic chính
+    try {
+        // Lưu lại các biến cần thiết
+        const userSessionCopy = { ...userSession };
+        
+        // Kiểm tra vị trí trước khi gửi
+        if (userSessionCopy && userSessionCopy.requireLocation === true) {
+            try {
+                const pos = await new Promise((res, rej) => 
+                    navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 7000 })
+                );
+                
+                if (userSessionCopy.adminLocation) {
+                    const dist = getDistance(
+                        pos.coords.latitude, pos.coords.longitude,
+                        userSessionCopy.adminLocation.lat, userSessionCopy.adminLocation.lng
+                    );
+                    const allowedRadius = Number(userSessionCopy.locationRadius) || 50;
+                    
+                    // Nếu ngoài bán kính, ghi nhận gian lận
+                    if (dist > allowedRadius) {
+                        const name = document.querySelector('.u-input')?.value || 'Không xác định';
+                        const time = new Date().toLocaleString('vi-VN');
+                        addFraudRecord(name, dist, time, `Ngoài bán kính ${allowedRadius}m`);
+                        showToast(`⚠️ Đã ghi nhận gian lận: cách ${Math.round(dist)}m`, "error");
+                    }
+                }
+            } catch (e) {
+                // Nếu không lấy được GPS, vẫn ghi nhận là lỗi GPS
+                console.warn("Không lấy được vị trí khi kiểm tra:", e);
+            }
+        }
+        
+        // Gọi hàm gốc
+        await originalSubmitAttendance(event);
+        
+    } catch (e) {
+        console.error("Lỗi trong submitAttendance (đã mở rộng):", e);
+        throw e;
+    }
+};
+
+// === KHỞI TẠO ===
+document.addEventListener('DOMContentLoaded', function() {
+    // Load dữ liệu gian lận từ localStorage
+    loadFraudData();
+    
+    // Cập nhật badge khi có dữ liệu mới
+    setInterval(() => {
+        const badge = document.getElementById('fraud-badge');
+        if (badge) {
+            badge.innerText = fraudData.length;
+        }
+    }, 5000);
+    
+    // KIỂM TRA TRẠNG THÁI GPS BAN ĐẦU
+    const gpsToggle = document.getElementById('a-require-location');
+    const fraudBtnContainer = document.getElementById('fraud-btn-container');
+    const radiusContainer = document.getElementById('radius-setting-container');
+    
+    if (gpsToggle && fraudBtnContainer) {
+        if (gpsToggle.checked) {
+            fraudBtnContainer.classList.remove('hidden');
+            if (radiusContainer) {
+                radiusContainer.style.opacity = "1";
+                radiusContainer.style.pointerEvents = "auto";
+            }
+        } else {
+            fraudBtnContainer.classList.add('hidden');
+            if (radiusContainer) {
+                radiusContainer.style.opacity = "0.5";
+                radiusContainer.style.pointerEvents = "none";
+            }
+        }
+    }
+});
+
+// === XÓA PHẦN THÊM NÚT TỰ ĐỘNG (đã được thêm trực tiếp vào HTML) ===
+// Không cần đoạn code thêm nút ở đây nữa
+</script>
 
 <!-- ===== THÊM SCRIPT KHỞI TẠO THỜI GIAN KHI RESTORE ===== -->
 <script>

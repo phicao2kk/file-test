@@ -3031,11 +3031,11 @@ function toggleMute() {
     if (isMuted) {
         if (statusText) statusText.style.color = "#64748b";
         if (indicator) indicator.classList.add('hidden');
-        showToast("Đã tắt âm thanh thông báo", "info");
+        showToast("Đã tắt thông báo", "info");
     } else {
         if (statusText) statusText.style.color = "#10b981";
         if (indicator) indicator.classList.remove('hidden');
-        showToast("Đã bật âm thanh thông báo", "success");
+        showToast("Đã bật thông báo", "success");
     }
 }
 

@@ -1115,7 +1115,7 @@ input[type="number"] {
                     <div class="flex items-center justify-between">
                         <div class="flex flex-col">
                             <span class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Bảo mật GPS</span>
-                            <span class="text-[8px] text-slate-500 uppercase font-bold mt-0.5">Chống điểm danh từ xa</span>
+                            <span class="text-[8px] text-slate-500 uppercase font-bold mt-0.5">Chống gian lận điểm danh từ xa</span>
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" id="a-require-location" class="sr-only peer" onchange="handleGpsToggle()">
@@ -1578,13 +1578,12 @@ async function activateSession() {
             locationRadius: pendingRadius,
             ts: Date.now(),
             ownerId: user.uid,
-            // === THÊM TRẠNG THÁI THỜI GIAN MẶC ĐỊNH: VÔ HẠN ===
             timeLimit: {
                 remainingSeconds: 0,
                 totalSeconds: 0,
                 isRunning: false,
                 isPaused: false,
-                isUnlocked: true,  // Mặc định MỞ KHÓA (VÔ HẠN)
+                isUnlocked: true,
                 startTime: null,
                 pausedAt: null,
                 updatedAt: Date.now()
@@ -1597,21 +1596,26 @@ async function activateSession() {
             sessionData.allowMultiple = false;
         }
 
-        // Ghi dữ liệu Session
         await rdb.ref('dynamic_attendance/sessions/' + code).set(sessionData);
-        
-        // Ghi vào lịch sử cá nhân của Admin
         await rdb.ref('dynamic_attendance/users/' + user.uid + '/my_sessions/' + code).set(true);
 
         currentSession = sessionData;
-        
-        // Lưu code vào biến timeLimit
         timeLimit.code = code;
         
-        // RESET TRẠNG THÁI THỜI GIAN KHI TẠO SỰ KIỆN MỚI
         resetTimeLimitState();
-        timeLimit.isUnlocked = true;  // Đảm bảo là VÔ HẠN
+        timeLimit.isUnlocked = true;
         updateTimeUI();
+
+        // === RESET DỮ LIỆU GIAN LẬN KHI TẠO SESSION MỚI ===
+        fraudData = [];
+        try {
+            localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
+        } catch (e) {}
+        updateFraudBadge();
+        updateFraudUI();
+
+        // === LẮNG NGHE GIAN LẬN CHO SESSION MỚI ===
+        setupFraudListener(code);
 
         // LOGIC HIỆN QR MỎ NEO NẾU DÙNG PC + BẬT GPS
         if (isGpsRequired && adminDeviceType === 'pc') {
@@ -1929,6 +1933,19 @@ function checkAuthState() {
                 addField("Họ và Tên"); 
                 addField("Lớp / Phòng ban");
             }
+            
+            // === LOAD DỮ LIỆU GIAN LẬN TỪ LOCALSTORAGE ===
+            loadFraudData();
+            
+            // === QUAN TRỌNG: NẾU CÓ SESSION ĐANG HOẠT ĐỘNG, LOAD TỪ FIREBASE ===
+            if (currentSession && currentSession.code) {
+                console.log("🔄 Đang tải dữ liệu gian lận từ Firebase cho session:", currentSession.code);
+                loadFraudDataForSession(currentSession.code);
+                setupFraudListener(currentSession.code);
+            } else {
+                console.log("⚠️ Chưa có session, chờ khôi phục hoặc tạo mới");
+            }
+            
         } else {
             showView('auth');
             if (nav) nav.innerHTML = ""; 
@@ -2825,6 +2842,7 @@ async function restoreSession(code) {
         }
 
         // === KHÔI PHỤC DỮ LIỆU GIAN LẬN ===
+        // Load dữ liệu gian lận từ Firebase
         loadFraudDataForSession(code);
         
         // Lắng nghe gian lận real-time
@@ -3314,13 +3332,14 @@ function setupFraudListener(code) {
     if (fraudListenerRef) {
         fraudRef.off();
         fraudListenerRef = null;
+        console.log("🔄 Đã dừng listener cũ");
     }
     
     let isFirstLoad = true;
     
     // Load dữ liệu cũ
     fraudRef.once('value').then(snap => {
-        console.log("📂 Đã tải dữ liệu gian lận từ Firebase");
+        console.log("📂 Đã tải dữ liệu gian lận từ Firebase (lần đầu)");
         if (snap.exists()) {
             const data = snap.val();
             const records = Object.values(data);
@@ -3350,6 +3369,7 @@ function setupFraudListener(code) {
     }).catch(err => {
         console.warn("❌ Lỗi tải dữ liệu gian lận:", err);
         isFirstLoad = false;
+        loadFraudData();
     });
 
     // Lắng nghe dữ liệu mới (real-time)
@@ -3385,18 +3405,29 @@ function setupFraudListener(code) {
             updateFraudBadge();
             updateFraudUI();
             
-            // 🔴 THÔNG BÁO CHO ADMIN - KHÁC VỚI ĐIỂM DANH THÀNH CÔNG
+            // 🔴 THÔNG BÁO CHO ADMIN
             if (!isMuted) {
                 const userName = data.name || "Không xác định";
                 const distance = data.distance || "?";
                 const reason = data.reason || "Ngoài bán kính";
                 showToast(`🚨 GIAN LẬN: ${userName.toUpperCase()} - cách ${distance}m (${reason})`, "error");
-                playAlertSound(); // Âm thanh báo động
+                playAlertSound();
             }
         } else {
             console.log("⏭️ Đã có dữ liệu này, bỏ qua");
         }
     });
+}
+
+// === RELOAD DỮ LIỆU GIAN LẬN (THỦ CÔNG) ===
+function reloadFraudData() {
+    if (currentSession && currentSession.code) {
+        showToast("Đang tải lại dữ liệu gian lận...", "info");
+        loadFraudDataForSession(currentSession.code);
+        setupFraudListener(currentSession.code);
+    } else {
+        showToast("Không có session để tải dữ liệu!", "info");
+    }
 }
 
 // === CẬP NHẬT UI GIAN LẬN ===
@@ -3408,15 +3439,21 @@ function updateFraudUI() {
     }
 }
 
-// === TẢI DỮ LIỆU GIAN LẬN KHI RESTORE SESSION ===
+// === TẢI DỮ LIỆU GIAN LẬN TỪ FIREBASE ===
 function loadFraudDataForSession(code) {
-    if (!code) return;
+    if (!code) {
+        console.warn("⚠️ Không có code để tải dữ liệu gian lận");
+        return;
+    }
     
     const fraudRef = rdb.ref('dynamic_attendance/fraud/' + code);
+    console.log("📂 Đang tải dữ liệu gian lận cho session:", code);
+    
     fraudRef.once('value').then(snap => {
         if (snap.exists()) {
             const data = snap.val();
             const records = Object.values(data);
+            console.log("📊 Số bản ghi từ Firebase:", records.length);
             
             // Reset fraudData và load từ Firebase
             fraudData = records;
@@ -3432,8 +3469,9 @@ function loadFraudDataForSession(code) {
             // Cập nhật UI
             updateFraudBadge();
             updateFraudUI();
-            console.log("📂 Đã tải dữ liệu gian lận:", fraudData.length, "bản ghi");
+            console.log("✅ Đã tải dữ liệu gian lận:", fraudData.length, "bản ghi");
         } else {
+            console.log("📂 Không có dữ liệu gian lận trên Firebase");
             fraudData = [];
             try {
                 localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
@@ -3442,7 +3480,9 @@ function loadFraudDataForSession(code) {
             updateFraudUI();
         }
     }).catch(err => {
-        console.warn("Không thể tải dữ liệu gian lận:", err);
+        console.warn("❌ Không thể tải dữ liệu gian lận từ Firebase:", err);
+        // Vẫn thử load từ local nếu có
+        loadFraudData();
     });
 }
 

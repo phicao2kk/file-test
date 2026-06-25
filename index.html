@@ -847,6 +847,93 @@ input[type="number"] {
     justify-content: center;
     padding: 1rem;
 }
+
+/* === CỘT XÓA TRONG BẢNG GIAN LẬN - RỘNG RÃI === */
+#fraud-table-body td:first-child {
+    width: 50px !important;
+    min-width: 50px !important;
+    max-width: 50px !important;
+    padding: 6px 4px !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+/* Nút xóa - KÍCH THƯỚC VỪA PHẢI, DỄ BẤM */
+.fraud-delete-btn {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    max-width: 32px !important;
+    max-height: 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    background: rgba(239, 68, 68, 0.1) !important;
+    border: 1.5px solid rgba(239, 68, 68, 0.2) !important;
+    color: #ef4444 !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+    opacity: 1 !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    line-height: 1 !important;
+}
+
+.fraud-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.25) !important;
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    transform: scale(1.1) !important;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.2) !important;
+}
+
+.fraud-delete-btn:active {
+    transform: scale(0.85) !important;
+    background: #ef4444 !important;
+    color: white !important;
+}
+
+/* Các ô dữ liệu - padding thoải mái */
+#fraud-table-body td {
+    padding: 10px 14px !important;
+    vertical-align: middle !important;
+    font-size: 13px !important;
+}
+
+/* Cột STT */
+#fraud-table-body td:nth-child(2) {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    padding: 10px 4px !important;
+    text-align: center !important;
+}
+
+/* Header */
+#fraud-data-modal thead th {
+    padding: 10px 14px !important;
+    font-size: 10px !important;
+}
+
+#fraud-data-modal thead th:first-child {
+    width: 50px !important;
+    min-width: 50px !important;
+    max-width: 50px !important;
+    padding: 10px 4px !important;
+    text-align: center !important;
+}
+
+#fraud-data-modal thead th:nth-child(2) {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    padding: 10px 4px !important;
+    text-align: center !important;
+}
+
     </style>
 </head>
 <body>
@@ -1770,6 +1857,7 @@ async function submitAttendance(event) {
     }
     
     const deviceId = getUniqueDeviceId(); 
+    const userName = vals[0] || document.querySelector('.u-input')?.value || 'Không xác định';
 
     // === KIỂM TRA ĐÃ ĐIỂM DANH CHƯA ===
     if (!userSession.allowMultiple) {
@@ -1785,10 +1873,6 @@ async function submitAttendance(event) {
     }
 
     // === KIỂM TRA GPS - PHÁT HIỆN GIAN LẬN ===
-    let isFraud = false;
-    let fraudDistance = 0;
-    let fraudReason = '';
-
     if (userSession && userSession.requireLocation === true) {
         try {
             const pos = await new Promise((res, rej) => 
@@ -1806,16 +1890,15 @@ async function submitAttendance(event) {
                 
                 if (dist > allowedRadius) {
                     // 🚨 PHÁT HIỆN GIAN LẬN
-                    const name = vals[0] || document.querySelector('.u-input')?.value || 'Không xác định';
                     const time = new Date().toLocaleString('vi-VN');
                     
-                    console.log("⚠️ PHÁT HIỆN GIAN LẬN:", name, "-", Math.round(dist), "m");
+                    console.log("⚠️ PHÁT HIỆN GIAN LẬN:", userName, "-", Math.round(dist), "m");
                     
                     // 📝 GHI NHẬN GIAN LẬN (LƯU RIÊNG)
-                    addFraudRecord(name, dist, time, `Ngoài bán kính ${allowedRadius}m`);
+                    addFraudRecord(userName, dist, time, `Ngoài bán kính ${allowedRadius}m`);
                     
-                    // ✅ CHỈ HIỂN THỊ 1 THÔNG BÁO DUY NHẤT
-                    showToast(`⚠️ Đã ghi nhận gian lận: cách ${Math.round(dist)}m`, "error");
+                    // ✅ CHỈ HIỂN THỊ 1 THÔNG BÁO DUY NHẤT CHO NGƯỜI DÙNG
+                    showToast(`⚠️ Bạn đang ở ngoài khu vực cho phép (${Math.round(dist)}m)`, "error");
                     
                     if (btn) { 
                         btn.disabled = false; 
@@ -3439,12 +3522,15 @@ function setupFraudListener(code) {
             updateFraudBadge();
             updateFraudUI();
             
-            // 🔴 THÔNG BÁO CHO ADMIN
+            // 🔴 THÔNG BÁO CHI TIẾT CHO ADMIN
             if (!isMuted) {
                 const userName = data.name || "Không xác định";
                 const distance = data.distance || "?";
                 const reason = data.reason || "Ngoài bán kính";
-                showToast(`🚨 GIAN LẬN: ${userName.toUpperCase()} - cách ${distance}m (${reason})`, "error");
+                const time = data.time || new Date().toLocaleString('vi-VN');
+                
+                // Hiển thị thông báo chi tiết có tên người gian lận
+                showToast(`🚨 GIAN LẬN: ${userName.toUpperCase()} - cách ${distance}m (${reason}) - ${time}`, "error");
                 playAlertSound();
             }
         } else {
@@ -5404,6 +5490,15 @@ function addFraudRecord(name, distance, time, reason = 'Ngoài bán kính') {
     // Cập nhật badge ngay
     updateFraudBadge();
     
+    // 🔴 THÔNG BÁO CHO ADMIN (NẾU CHƯA CÓ LISTENER)
+    if (!isMuted && currentSession && currentSession.code) {
+        // Kiểm tra xem đã có listener chưa, nếu chưa thì gửi thông báo trực tiếp
+        if (!fraudListenerRef) {
+            showToast(`🚨 GIAN LẬN: ${record.name.toUpperCase()} - cách ${record.distance}m (${record.reason})`, "error");
+            playAlertSound();
+        }
+    }
+    
     // 📤 LƯU LÊN FIREBASE - NODE RIÊNG: fraud/{sessionCode}/
     if (currentSession && currentSession.code) {
         const fraudRef = rdb.ref('dynamic_attendance/fraud/' + currentSession.code);
@@ -5486,59 +5581,64 @@ function renderFraudTable() {
     }
     
     tbody.innerHTML = fraudData.map((record, index) => {
-        let distanceText = '';
-        let tagClass = 'unknown';
-        let statusText = 'Không xác định';
-        
-        if (record.distance !== undefined && record.distance !== null) {
-            const dist = record.distance;
-            if (dist <= 50) {
-                distanceText = `${dist}m`;
-                tagClass = 'near';
-                statusText = '✅ Gần vị trí điểm danh';
-            } else if (dist <= 500) {
-                distanceText = `${dist}m`;
-                tagClass = 'far';
-                statusText = '⚠️ Khá xa';
-            } else {
-                distanceText = `${dist}m`;
-                tagClass = 'very-far';
-                statusText = '❌ Quá xa';
-            }
+    let distanceText = '';
+    let tagClass = 'unknown';
+    let statusText = 'Không xác định';
+    
+    if (record.distance !== undefined && record.distance !== null) {
+        const dist = record.distance;
+        if (dist <= 50) {
+            distanceText = `${dist}m`;
+            tagClass = 'near';
+            statusText = '✅ Gần vị trí điểm danh';
+        } else if (dist <= 500) {
+            distanceText = `${dist}m`;
+            tagClass = 'far';
+            statusText = '⚠️ Khá xa';
         } else {
-            distanceText = 'N/A';
-            tagClass = 'unknown';
-            statusText = 'Không xác định';
+            distanceText = `${dist}m`;
+            tagClass = 'very-far';
+            statusText = '❌ Quá xa';
         }
-        
-        return `
-            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                <!-- Cột Xóa -->
-                <td class="px-3 py-3 text-center">
-                    <button onclick="deleteFraudRecord('${record.id}')" 
-                            class="w-7 h-7 inline-flex items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-200 opacity-0 group-hover:opacity-100">
-                        <i class="fa-solid fa-xmark text-sm"></i>
-                    </button>
-                </td>
-                <!-- Cột STT -->
-                <td class="px-4 py-3 text-slate-400 font-bold text-center">${index + 1}</td>
-                <!-- Cột Họ tên -->
-                <td class="px-4 py-3 font-bold text-white">${record.name || 'Không xác định'}</td>
-                <!-- Cột Khoảng cách -->
-                <td class="px-4 py-3">
-                    <span class="distance-tag ${tagClass}">${distanceText}</span>
-                </td>
-                <!-- Cột Trạng thái -->
-                <td class="px-4 py-3 text-xs font-bold">
-                    <span class="${tagClass === 'near' ? 'text-success' : tagClass === 'far' ? 'text-warning' : 'text-danger'}">
-                        ${statusText}
-                    </span>
-                </td>
-                <!-- Cột Thời gian -->
-                <td class="px-4 py-3 text-slate-400 text-xs font-mono">${record.time || '--'}</td>
-            </tr>
-        `;
-    }).join('');
+    } else {
+        distanceText = 'N/A';
+        tagClass = 'unknown';
+        statusText = 'Không xác định';
+    }
+    
+    return `
+        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+            <!-- Cột Xóa - LUÔN HIỂN THỊ -->
+            <td style="width:50px; min-width:50px; max-width:50px; padding:6px 4px; text-align:center; vertical-align:middle;">
+                <button onclick="deleteFraudRecord('${record.id}')" 
+                        class="fraud-delete-btn"
+                        title="Xóa bản ghi này">
+                    ✕
+                </button>
+            </td>
+            <!-- Cột STT -->
+            <td style="width:40px; min-width:40px; max-width:40px; padding:10px 4px; text-align:center; vertical-align:middle;" 
+                class="text-slate-400 font-bold text-sm">${index + 1}</td>
+            <!-- Cột Họ tên -->
+            <td style="padding:10px 14px; vertical-align:middle;" 
+                class="font-bold text-white text-sm">${record.name || 'Không xác định'}</td>
+            <!-- Cột Khoảng cách -->
+            <td style="padding:10px 14px; vertical-align:middle; text-align:center;">
+                <span class="distance-tag ${tagClass}">${distanceText}</span>
+            </td>
+            <!-- Cột Trạng thái -->
+            <td style="padding:10px 14px; vertical-align:middle; text-align:center;" 
+                class="text-xs font-bold">
+                <span class="${tagClass === 'near' ? 'text-success' : tagClass === 'far' ? 'text-warning' : 'text-danger'}">
+                    ${statusText}
+                </span>
+            </td>
+            <!-- Cột Thời gian -->
+            <td style="padding:10px 14px; vertical-align:middle; text-align:center;" 
+                class="text-slate-400 text-xs font-mono">${record.time || '--'}</td>
+        </tr>
+    `;
+}).join('');
 }
 
 // === XÓA MỘT BẢN GHI GIAN LẬN ===

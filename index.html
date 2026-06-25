@@ -83,6 +83,7 @@ input {
     background: radial-gradient(circle, rgba(153, 27, 27, 0.6) 0%, rgba(3, 7, 18, 0.98) 100%) !important;
     backdrop-filter: blur(25px) grayscale(1) !important;
     display: flex !important;
+    z-index: 99999 !important;
 }
 
 /* Hiệu ứng click chung cho tất cả các nút */
@@ -836,6 +837,16 @@ input[type="number"] {
         .text-warning { color: #f59e0b; }
         .text-danger { color: #ef4444; }
 
+        /* Thay đổi z-index của confirm-modal từ 11000 lên 99999 */
+#confirm-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 99999 !important; /* Tăng lên cao nhất */
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
     </style>
 </head>
 <body>
@@ -2383,6 +2394,7 @@ function showConfirm(msg, callback) {
     msgEl.innerText = msg;
     modal.classList.remove('hidden');
     modal.classList.add('backdrop-panic');
+    modal.style.zIndex = '99999'; // Đảm bảo z-index cao nhất
     
     content.classList.remove('modal-urgent');
     void content.offsetWidth; 
@@ -2467,38 +2479,60 @@ document.getElementById('confirm-btn-yes').onclick = async function() {
         const oldText = this.innerText;
         this.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> ĐANG XÓA...';
         
-        await confirmCallback(); 
-        
-        closeConfirm(true);
-        
-        this.disabled = false;
-        this.innerText = oldText;
+        try {
+            await confirmCallback();
+            closeConfirm(true);
+        } catch (e) {
+            console.error("Lỗi khi thực thi callback:", e);
+            showToast("Lỗi xóa dữ liệu!", "error");
+            closeConfirm(false);
+        } finally {
+            this.disabled = false;
+            this.innerText = oldText;
+        }
     }
 };
 
-// === XÓA DỮ LIỆU GIAN LẬN ===
+// === XÓA DỮ LIỆU GIAN LẬN VỚI CONFIRM ===
 function clearFraudData() {
     if (fraudData.length === 0) {
         return showToast("Không có dữ liệu để xóa!", "info");
     }
     
-    showConfirm("XÁC NHẬN: Bạn muốn xóa toàn bộ dữ liệu gian lận?", () => {
-        fraudData = [];
+    // Sử dụng showConfirm để hiển thị modal xác nhận
+    showConfirm("XÁC NHẬN: Bạn muốn xóa toàn bộ dữ liệu gian lận? Hành động này không thể hoàn tác!", async () => {
         try {
-            localStorage.removeItem('scheck_fraud_data');
-        } catch (e) {}
-        
-        // 🗑 XÓA TRÊN FIREBASE
-        if (currentSession && currentSession.code) {
-            rdb.ref('dynamic_attendance/fraud/' + currentSession.code).remove().catch(err => {
-                console.warn("Không thể xóa gian lận trên Firebase:", err);
-            });
+            showToast("Đang xóa dữ liệu gian lận...", "info");
+            
+            // Xóa trên Firebase
+            if (currentSession && currentSession.code) {
+                await rdb.ref('dynamic_attendance/fraud/' + currentSession.code).remove();
+            }
+            
+            // Xóa local
+            fraudData = [];
+            try {
+                localStorage.removeItem('scheck_fraud_data');
+            } catch (e) {}
+            
+            // Cập nhật UI
+            renderFraudTable();
+            updateFraudStats();
+            updateFraudBadge();
+            
+            showToast("Đã xóa toàn bộ dữ liệu gian lận!", "success");
+        } catch (err) {
+            console.warn("Không thể xóa gian lận trên Firebase:", err);
+            // Vẫn xóa local nếu lỗi Firebase
+            fraudData = [];
+            try {
+                localStorage.removeItem('scheck_fraud_data');
+            } catch (e) {}
+            renderFraudTable();
+            updateFraudStats();
+            updateFraudBadge();
+            showToast("Đã xóa dữ liệu gian lận (local) !", "warning");
         }
-        
-        renderFraudTable();
-        updateFraudStats();
-        updateFraudBadge();
-        showToast("Đã xóa dữ liệu gian lận!", "success");
     });
 }
 
@@ -5298,11 +5332,12 @@ function restoreTimeStateFromFirebase(code) {
             <table class="w-full text-left border-separate border-spacing-0">
                 <thead class="text-slate-500 text-[9px] uppercase font-black tracking-widest sticky top-0 bg-[#0f172a] z-10">
                     <tr>
-                        <th class="px-4 py-3 border-b border-white/5">STT</th>
-                        <th class="px-4 py-3 border-b border-white/5">Họ tên</th>
-                        <th class="px-4 py-3 border-b border-white/5">Khoảng cách</th>
-                        <th class="px-4 py-3 border-b border-white/5">Trạng thái</th>
-                        <th class="px-4 py-3 border-b border-white/5">Thời gian</th>
+                        <th class="px-3 py-3 text-center w-10">✕</th>  <!-- Cột Xóa -->
+                        <th class="px-4 py-3 text-center w-12">STT</th>
+                        <th class="px-4 py-3 text-left">Họ tên</th>
+                        <th class="px-4 py-3 text-center">Khoảng cách</th>
+                        <th class="px-4 py-3 text-center">Trạng thái</th>
+                        <th class="px-4 py-3 text-center">Thời gian</th>
                     </tr>
                 </thead>
                 <tbody id="fraud-table-body" class="text-sm">
@@ -5441,7 +5476,7 @@ function renderFraudTable() {
     if (fraudData.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="5" class="text-center py-12 text-slate-500 text-xs font-bold uppercase tracking-widest">
+                <td colspan="6" class="text-center py-12 text-slate-500 text-xs font-bold uppercase tracking-widest">
                     <i class="fa-regular fa-face-smile text-2xl block mb-3"></i>
                     Chưa có dữ liệu gian lận
                 </td>
@@ -5477,21 +5512,83 @@ function renderFraudTable() {
         }
         
         return `
-            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                <!-- Cột Xóa -->
+                <td class="px-3 py-3 text-center">
+                    <button onclick="deleteFraudRecord('${record.id}')" 
+                            class="w-7 h-7 inline-flex items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-200 opacity-0 group-hover:opacity-100">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </td>
+                <!-- Cột STT -->
                 <td class="px-4 py-3 text-slate-400 font-bold text-center">${index + 1}</td>
+                <!-- Cột Họ tên -->
                 <td class="px-4 py-3 font-bold text-white">${record.name || 'Không xác định'}</td>
+                <!-- Cột Khoảng cách -->
                 <td class="px-4 py-3">
                     <span class="distance-tag ${tagClass}">${distanceText}</span>
                 </td>
+                <!-- Cột Trạng thái -->
                 <td class="px-4 py-3 text-xs font-bold">
                     <span class="${tagClass === 'near' ? 'text-success' : tagClass === 'far' ? 'text-warning' : 'text-danger'}">
                         ${statusText}
                     </span>
                 </td>
+                <!-- Cột Thời gian -->
                 <td class="px-4 py-3 text-slate-400 text-xs font-mono">${record.time || '--'}</td>
             </tr>
         `;
     }).join('');
+}
+
+// === XÓA MỘT BẢN GHI GIAN LẬN ===
+function deleteFraudRecord(recordId) {
+    if (!recordId) return;
+    
+    // Tìm bản ghi cần xóa
+    const record = fraudData.find(r => r.id === recordId);
+    if (!record) {
+        showToast("Không tìm thấy bản ghi!", "error");
+        return;
+    }
+    
+    const name = record.name || 'Không xác định';
+    
+    showConfirm(`XÁC NHẬN: Bạn muốn xóa bản ghi gian lận của "${name}"?`, async () => {
+        try {
+            // Xóa khỏi mảng fraudData
+            fraudData = fraudData.filter(r => r.id !== recordId);
+            
+            // Cập nhật localStorage
+            try {
+                localStorage.setItem('scheck_fraud_data', JSON.stringify(fraudData));
+            } catch (e) {}
+            
+            // Xóa trên Firebase
+            if (currentSession && currentSession.code) {
+                // Tìm key của record trong Firebase
+                const fraudRef = rdb.ref('dynamic_attendance/fraud/' + currentSession.code);
+                const snap = await fraudRef.orderByChild('id').equalTo(recordId).once('value');
+                
+                if (snap.exists()) {
+                    const key = Object.keys(snap.val())[0];
+                    await fraudRef.child(key).remove();
+                    console.log("✅ Đã xóa trên Firebase:", recordId);
+                }
+            }
+            
+            // Cập nhật UI
+            renderFraudTable();
+            updateFraudStats();
+            updateFraudBadge();
+            
+            showToast(`Đã xóa bản ghi của "${name}"!`, "success");
+            
+        } catch (e) {
+            console.error("Lỗi xóa bản ghi:", e);
+            showToast("Lỗi khi xóa dữ liệu!", "error");
+        }
+    });
 }
 
 // === CẬP NHẬT THỐNG KÊ ===

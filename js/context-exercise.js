@@ -1,330 +1,359 @@
-// context-exercise.js - Tạo bài tập điền từ dựa trên ngữ cảnh
+// ==================== BỘ ĐẾM GIỜ CHO BÀI TẬP ====================
+let exerciseTimer = null;
+let exerciseTimeLeft = 0;
+let exerciseTotalTime = 0;
 
-class ContextExerciseGenerator {
-    constructor() {
-        this.vocabulary = getVocabulary();
+function startExerciseTimer() {
+    // Dừng timer cũ nếu có
+    if (exerciseTimer) {
+        clearInterval(exerciseTimer);
+        exerciseTimer = null;
     }
-
-    /**
-     * Tạo bài tập điền từ ngữ cảnh
-     * @param {Array} words - Danh sách từ cần kiểm tra
-     * @param {Object} options - Tùy chọn
-     * @returns {Object} Bài tập điền từ
-     */
-    generateExercise(words, options = {}) {
-        const {
-            difficulty = 'medium',     // easy, medium, hard
-            count = 10,               // Số câu hỏi
-            type = 'multiple_choice',  // fill_in_blank, multiple_choice, matching
-            contextType = 'real_life'  // real_life, academic, business, daily
-        } = options;
-
-        // Chọn từ ngẫu nhiên
-        const selectedWords = this.selectWords(words, count);
+    
+    const exercise = window.currentExercise;
+    if (!exercise) return;
+    
+    exerciseTotalTime = exercise.timeLimit || 300; // 5 phút mặc định
+    exerciseTimeLeft = exerciseTotalTime;
+    updateTimerDisplay();
+    
+    exerciseTimer = setInterval(() => {
+        exerciseTimeLeft--;
+        updateTimerDisplay();
         
-        // Tạo ngữ cảnh cho mỗi từ
-        const contexts = selectedWords.map(word => 
-            this.generateContext(word, difficulty, contextType)
-        );
-
-        // Tạo bài tập
-        const exercise = {
-            title: this.getExerciseTitle(type, difficulty),
-            description: `Thực hành ${selectedWords.length} từ vựng với ngữ cảnh thực tế`,
-            type: type,
-            difficulty: difficulty,
-            questions: [],
-            totalQuestions: contexts.length,
-            timeLimit: contexts.length * 30 // 30 giây mỗi câu
-        };
-
-        // Tạo câu hỏi dựa trên loại bài tập
-        switch(type) {
-            case 'multiple_choice':
-                exercise.questions = this.createMultipleChoice(contexts);
-                break;
-            case 'fill_in_blank':
-                exercise.questions = this.createFillInBlank(contexts);
-                break;
-            case 'matching':
-                exercise.questions = this.createMatching(contexts);
-                break;
-            default:
-                exercise.questions = this.createMultipleChoice(contexts);
+        // Hết giờ
+        if (exerciseTimeLeft <= 0) {
+            clearInterval(exerciseTimer);
+            exerciseTimer = null;
+            // Tự động nộp bài
+            submitExercise();
+            showToast('⏰ Hết giờ! Bài tập đã được tự động nộp.');
         }
+    }, 1000);
+}
 
-        return exercise;
+function updateTimerDisplay() {
+    const timerDisplay = document.getElementById('timer-display');
+    if (!timerDisplay) return;
+    
+    const minutes = Math.floor(exerciseTimeLeft / 60);
+    const seconds = exerciseTimeLeft % 60;
+    timerDisplay.textContent = `⏱️ ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    
+    // Đổi màu khi còn ít thời gian
+    if (exerciseTimeLeft <= 10) {
+        timerDisplay.style.color = '#ef4444';
+    } else if (exerciseTimeLeft <= 30) {
+        timerDisplay.style.color = '#f59e0b';
+    } else {
+        timerDisplay.style.color = '#6b7280';
     }
+}
 
-    /**
-     * Chọn từ cho bài tập
-     */
-    selectWords(words, count) {
-        const shuffled = [...words].sort(() => Math.random() - 0.5);
-        return shuffled.slice(0, Math.min(count, shuffled.length));
+function stopExerciseTimer() {
+    if (exerciseTimer) {
+        clearInterval(exerciseTimer);
+        exerciseTimer = null;
     }
+}
 
-    /**
-     * Tạo ngữ cảnh cho từ
-     */
-    generateContext(word, difficulty, contextType) {
-        const contexts = this.getContextTemplates(word, contextType);
-        const selected = contexts[Math.floor(Math.random() * contexts.length)];
-        
-        return {
-            word: word,
-            sentence: selected.sentence,
-            blankIndex: selected.blankIndex,
-            hint: selected.hint || this.generateHint(word, difficulty),
-            meaning: word.vi,
-            options: this.generateOptions(word, difficulty)
-        };
+// Toast notification
+function showToast(msg, isError = false) {
+    const toast = document.createElement('div');
+    toast.className = `fixed top-20 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-full text-white text-sm font-medium ${isError ? 'bg-red-500' : 'bg-blue-500'} animate-fade-in`;
+    toast.innerHTML = `<i class="fas ${isError ? 'fa-exclamation-circle' : 'fa-info-circle'} mr-2"></i>${msg}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// CẬP NHẬT HÀM renderExerciseQuestion
+function renderExerciseQuestion() {
+    const exercise = window.currentExercise;
+    const index = window.currentQuestionIndex;
+    if (!exercise || index >= exercise.questions.length) {
+        showExerciseResult();
+        return;
     }
-
-    /**
-     * Lấy template ngữ cảnh
-     */
-    getContextTemplates(word, contextType) {
-        const templates = {
-            real_life: [
-                {
-                    sentence: `I need to ${word.en} my homework before the deadline.`,
-                    blankIndex: 2,
-                    hint: 'Hoàn thành công việc đúng hạn'
-                },
-                {
-                    sentence: `She always ${word.en} coffee in the morning.`,
-                    blankIndex: 2,
-                    hint: 'Hành động thường làm'
-                },
-                {
-                    sentence: `Can you ${word.en} me the salt, please?`,
-                    blankIndex: 1,
-                    hint: 'Yêu cầu ai đó chuyển đồ'
-                },
-                {
-                    sentence: `They ${word.en} to travel to Vietnam next year.`,
-                    blankIndex: 1,
-                    hint: 'Dự định trong tương lai'
-                }
-            ],
-            business: [
-                {
-                    sentence: `The company needs to ${word.en} its marketing strategy.`,
-                    blankIndex: 3,
-                    hint: 'Cải thiện chiến lược'
-                },
-                {
-                    sentence: `We should ${word.en} this project before the quarter ends.`,
-                    blankIndex: 2,
-                    hint: 'Hoàn thành dự án'
-                }
-            ],
-            academic: [
-                {
-                    sentence: `Students must ${word.en} the research papers carefully.`,
-                    blankIndex: 2,
-                    hint: 'Đọc kỹ tài liệu'
-                }
-            ],
-            daily: [
-                {
-                    sentence: `I ${word.en} to the gym three times a week.`,
-                    blankIndex: 1,
-                    hint: 'Thói quen hàng ngày'
-                }
-            ]
-        };
-
-        return templates[contextType] || templates.real_life;
-    }
-
-    /**
-     * Tạo gợi ý cho từ
-     */
-    generateHint(word, difficulty) {
-        const hints = {
-            easy: `Từ này có nghĩa là: ${word.vi}`,
-            medium: `Từ này bắt đầu bằng chữ "${word.en[0]}"`,
-            hard: `Từ này có ${word.en.length} chữ cái`
-        };
-        return hints[difficulty] || hints.medium;
-    }
-
-    /**
-     * Tạo các lựa chọn cho câu hỏi
-     */
-    generateOptions(word, difficulty) {
-        const allWords = [];
-        const allTopics = Object.values(this.vocabulary);
-        allTopics.forEach(topic => {
-            topic.words.forEach(w => {
-                if (w.en !== word.en) allWords.push(w);
-            });
+    
+    const q = exercise.questions[index];
+    const total = exercise.totalQuestions;
+    
+    // Cập nhật header
+    document.getElementById('progress-text').textContent = `Câu ${index + 1}/${total}`;
+    document.getElementById('progress-bar').style.width = `${((index + 1) / total) * 100}%`;
+    
+    // Cập nhật câu hỏi
+    document.getElementById('question-number').textContent = `Câu hỏi ${index + 1}/${total}`;
+    document.getElementById('question-text').textContent = q.question || 'Chọn từ đúng để hoàn thành câu:';
+    document.getElementById('sentence-display').textContent = q.sentence || 'I need to ______ my homework.';
+    document.getElementById('hint-text').textContent = q.hint || 'Hoàn thành công việc';
+    document.getElementById('meaning-display').textContent = `📖 Nghĩa: ${q.meaning || 'từ'}`;
+    
+    // Render options
+    const optionsContainer = document.getElementById('options-container');
+    optionsContainer.innerHTML = '';
+    
+    if (q.type === 'multiple_choice' && q.options && q.options.length > 0) {
+        q.options.forEach((option, idx) => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.textContent = option.text || option;
+            btn.dataset.value = option.text || option;
+            btn.dataset.correct = option.correct || false;
+            btn.style.cssText = `
+                padding: 12px 16px;
+                border: 2px solid #e5e7eb;
+                border-radius: 10px;
+                background: white;
+                cursor: pointer;
+                transition: all 0.3s;
+                text-align: left;
+                font-size: 16px;
+                width: 100%;
+            `;
+            btn.onclick = () => selectExerciseOption(btn, btn.dataset.value);
+            btn.onmouseover = () => {
+                if (!btn.disabled) btn.style.borderColor = '#6366f1';
+            };
+            btn.onmouseout = () => {
+                if (!btn.disabled && !btn.classList.contains('selected')) btn.style.borderColor = '#e5e7eb';
+            };
+            optionsContainer.appendChild(btn);
         });
-
-        // Chọn 3 từ sai ngẫu nhiên
-        const shuffled = allWords.sort(() => Math.random() - 0.5);
-        const wrongOptions = shuffled.slice(0, 3);
-
-        // Trộn đáp án đúng với đáp án sai
-        const options = [
-            { text: word.en, correct: true },
-            ...wrongOptions.map(w => ({ text: w.en, correct: false }))
-        ];
-
-        return options.sort(() => Math.random() - 0.5);
-    }
-
-    /**
-     * Tạo câu hỏi trắc nghiệm
-     */
-    createMultipleChoice(contexts) {
-        return contexts.map((ctx, index) => ({
-            id: index + 1,
-            type: 'multiple_choice',
-            question: `Chọn từ đúng để hoàn thành câu:`,
-            sentence: ctx.sentence.replace(ctx.word.en, '______'),
-            options: ctx.options,
-            correctAnswer: ctx.word.en,
-            hint: ctx.hint,
-            meaning: ctx.meaning
-        }));
-    }
-
-    /**
-     * Tạo câu hỏi điền từ
-     */
-    createFillInBlank(contexts) {
-        return contexts.map((ctx, index) => ({
-            id: index + 1,
-            type: 'fill_in_blank',
-            question: `Điền từ còn thiếu vào chỗ trống:`,
-            sentence: ctx.sentence.replace(ctx.word.en, '_____'),
-            correctAnswer: ctx.word.en,
-            hint: ctx.hint,
-            meaning: ctx.meaning
-        }));
-    }
-
-    /**
-     * Tạo câu hỏi ghép cặp
-     */
-    createMatching(contexts) {
-        const pairs = contexts.map((ctx, index) => ({
-            id: index + 1,
-            english: ctx.word.en,
-            vietnamese: ctx.word.vi
-        }));
-
-        // Trộn thứ tự tiếng Việt
-        const shuffledVietnamese = [...pairs]
-            .sort(() => Math.random() - 0.5)
-            .map(p => p.vietnamese);
-
-        return pairs.map((pair, index) => ({
-            id: index + 1,
-            type: 'matching',
-            question: `Ghép từ tiếng Anh với nghĩa tiếng Việt:`,
-            english: pair.english,
-            options: shuffledVietnamese,
-            correctAnswer: pair.vietnamese
-        }));
-    }
-
-    /**
-     * Lấy tiêu đề bài tập
-     */
-    getExerciseTitle(type, difficulty) {
-        const typeNames = {
-            multiple_choice: 'Trắc nghiệm',
-            fill_in_blank: 'Điền từ vào chỗ trống',
-            matching: 'Ghép cặp'
+    } else if (q.type === 'fill_in_blank') {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Nhập từ còn thiếu...';
+        input.className = 'w-full p-3 border-2 border-gray-200 rounded-lg text-lg';
+        input.onchange = (e) => {
+            window.userAnswers[index] = e.target.value;
         };
-
-        const difficultyNames = {
-            easy: 'Cơ bản',
-            medium: 'Trung bình',
-            hard: 'Nâng cao'
+        input.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                window.userAnswers[index] = e.target.value;
+                document.getElementById('exercise-submit-btn')?.click();
+            }
         };
-
-        return `Bài tập ${typeNames[type]} - ${difficultyNames[difficulty]}`;
-    }
-
-    /**
-     * Đánh giá kết quả bài tập
-     */
-    evaluateExercise(userAnswers, exercise) {
-        let correct = 0;
-        const details = [];
-
-        exercise.questions.forEach((q, index) => {
-            const userAnswer = userAnswers[index];
-            const isCorrect = userAnswer === q.correctAnswer;
-            if (isCorrect) correct++;
-
-            details.push({
-                questionId: q.id,
-                userAnswer: userAnswer,
-                correctAnswer: q.correctAnswer,
-                isCorrect: isCorrect,
-                sentence: q.sentence,
-                meaning: q.meaning
-            });
+        optionsContainer.appendChild(input);
+        setTimeout(() => input.focus(), 100);
+    } else {
+        // Fallback: tạo các option mặc định
+        const defaultOptions = ['do', 'make', 'take', 'get'];
+        defaultOptions.forEach(option => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.textContent = option;
+            btn.dataset.value = option;
+            btn.dataset.correct = (option === 'do');
+            btn.style.cssText = `
+                padding: 12px 16px;
+                border: 2px solid #e5e7eb;
+                border-radius: 10px;
+                background: white;
+                cursor: pointer;
+                transition: all 0.3s;
+                text-align: left;
+                font-size: 16px;
+                width: 100%;
+            `;
+            btn.onclick = () => selectExerciseOption(btn, option);
+            optionsContainer.appendChild(btn);
         });
-
-        const total = exercise.totalQuestions;
-        const score = (correct / total) * 100;
-
-        let level;
-        if (score >= 90) level = '🌟 Xuất sắc! Bạn là bậc thầy từ vựng!';
-        else if (score >= 70) level = '👍 Tốt! Hãy tiếp tục luyện tập!';
-        else if (score >= 50) level = '📖 Cần ôn tập thêm một chút!';
-        else level = '💪 Đừng nản! Hãy thử lại nhé!';
-
-        return {
-            score: score,
-            correct: correct,
-            total: total,
-            level: level,
-            details: details,
-            timeSpent: userAnswers.timeSpent || 0,
-            recommendations: this.generateRecommendations(details)
-        };
     }
+    
+    // Cập nhật nút
+    const nextBtn = document.getElementById('exercise-next-btn');
+    const submitBtn = document.getElementById('exercise-submit-btn');
+    if (index === total - 1) {
+        nextBtn.classList.add('hidden');
+        submitBtn.classList.remove('hidden');
+    } else {
+        nextBtn.classList.remove('hidden');
+        submitBtn.classList.add('hidden');
+    }
+    
+    // Bắt đầu timer nếu chưa bắt đầu
+    if (!exerciseTimer) {
+        startExerciseTimer();
+    }
+}
 
-    /**
-     * Tạo đề xuất dựa trên kết quả
-     */
-    generateRecommendations(details) {
-        const wrongAnswers = details.filter(d => !d.isCorrect);
+// CẬP NHẬT HÀM showExerciseResult
+function showExerciseResult() {
+    stopExerciseTimer();
+    submitExercise();
+}
+
+// CẬP NHẬT HÀM submitExercise
+function submitExercise() {
+    stopExerciseTimer();
+    
+    const exercise = window.currentExercise;
+    const answers = window.userAnswers;
+    
+    if (!exercise) return;
+    
+    // Đánh giá
+    let correct = 0;
+    const details = [];
+    
+    exercise.questions.forEach((q, index) => {
+        const userAnswer = answers[index] || '';
+        const isCorrect = userAnswer.toLowerCase().trim() === q.correctAnswer.toLowerCase().trim();
+        if (isCorrect) correct++;
         
-        if (wrongAnswers.length === 0) {
-            return ['Bạn đã hoàn thành xuất sắc! Hãy thử bài tập khó hơn.'];
-        }
-
-        const recommendations = wrongAnswers.map(d => 
-            `Ôn lại từ "${d.correctAnswer}" trong câu: ${d.sentence}`
-        );
-
-        return recommendations.slice(0, 5);
+        details.push({
+            questionId: q.id,
+            userAnswer: userAnswer,
+            correctAnswer: q.correctAnswer,
+            isCorrect: isCorrect,
+            sentence: q.sentence,
+            meaning: q.meaning
+        });
+    });
+    
+    const total = exercise.totalQuestions;
+    const score = (correct / total) * 100;
+    
+    let level, emoji;
+    if (score >= 90) { level = 'Xuất sắc! Bạn là bậc thầy từ vựng!'; emoji = '🌟'; }
+    else if (score >= 70) { level = 'Tốt! Hãy tiếp tục luyện tập!'; emoji = '👍'; }
+    else if (score >= 50) { level = 'Cần ôn tập thêm một chút!'; emoji = '📖'; }
+    else { level = 'Đừng nản! Hãy thử lại nhé!'; emoji = '💪'; }
+    
+    // Hiển thị kết quả
+    document.getElementById('exercise-question-area').classList.add('hidden');
+    document.getElementById('exercise-result-area').classList.remove('hidden');
+    document.getElementById('result-score').textContent = `${correct}/${total}`;
+    document.getElementById('result-level').textContent = `${emoji} ${level}`;
+    
+    const recList = document.getElementById('result-recommendations');
+    recList.innerHTML = '';
+    const wrongDetails = details.filter(d => !d.isCorrect);
+    
+    if (wrongDetails.length === 0) {
+        recList.innerHTML = '<li class="text-green-600">✅ Bạn đã trả lời đúng tất cả! Tuyệt vời!</li>';
+        canvasConfetti({
+            particleCount: 200,
+            spread: 100,
+            origin: { y: 0.5 }
+        });
+    } else {
+        wrongDetails.forEach(d => {
+            const li = document.createElement('li');
+            li.className = 'text-sm text-gray-700 py-1 border-b border-gray-100';
+            li.innerHTML = `
+                <span class="text-red-500">✕</span> 
+                <span class="font-medium">${d.correctAnswer}</span> 
+                <span class="text-gray-500">- ${d.meaning}</span>
+                <span class="text-xs text-gray-400 block ml-6">"${d.sentence}"</span>
+            `;
+            recList.appendChild(li);
+        });
     }
+}
 
-    /**
-     * Tạo bài tập từ các từ đã học
-     */
-    generateExerciseFromLearnedWords(learnedWords, options = {}) {
-        // Lọc các từ đã học (có nghĩa tiếng Việt)
-        const words = learnedWords.filter(w => w.vi && w.en);
-        return this.generateExercise(words, options);
-    }
+// CẬP NHẬT HÀM createExerciseModal
+function createExerciseModal() {
+    if (document.getElementById('exerciseModal')) return;
+    
+    const modalHTML = `
+        <div id="exerciseModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 hidden backdrop-blur-sm">
+            <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] p-6 shadow-2xl overflow-hidden animate-scale-up">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h3 id="exercise-title" class="text-xl font-bold text-indigo-600 flex items-center gap-2">
+                            <i class="fas fa-pencil-alt"></i> Bài tập từ vựng
+                        </h3>
+                        <p id="exercise-desc" class="text-sm text-gray-500">Thực hành với ngữ cảnh thực tế</p>
+                    </div>
+                    <button onclick="closeExerciseModal()" class="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                        ✕
+                    </button>
+                </div>
 
-    /**
-     * Tạo bài tập từ chủ đề cụ thể
-     */
-    generateExerciseFromTopic(topicKey, options = {}) {
-        const topic = this.vocabulary[topicKey];
-        if (!topic) throw new Error(`Không tìm thấy chủ đề: ${topicKey}`);
-        return this.generateExercise(topic.words, options);
+                <!-- Progress -->
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm text-gray-600">
+                        <span id="progress-text">Câu 1/10</span>
+                        <span id="timer-display" class="font-mono font-bold">⏱️ 05:00</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-200 rounded-full mt-1 overflow-hidden">
+                        <div id="progress-bar" class="h-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-300" style="width:10%"></div>
+                    </div>
+                </div>
+
+                <!-- Question Area -->
+                <div id="exercise-question-area" class="overflow-y-auto max-h-[calc(90vh-270px)]">
+                    <div class="bg-gray-50 rounded-xl p-4 mb-4">
+                        <p id="question-number" class="text-sm text-indigo-600 font-semibold">Câu hỏi 1/10</p>
+                        <p id="question-text" class="text-lg font-medium mt-1">Chọn từ đúng để hoàn thành câu:</p>
+                        <div id="sentence-display" class="text-lg p-4 bg-white rounded-lg border-l-4 border-indigo-500 mt-2 font-medium">
+                            I need to ______ my homework.
+                        </div>
+                        <div id="meaning-display" class="text-sm text-gray-500 mt-2">📖 Nghĩa: làm</div>
+                        <div id="hint-area" class="mt-2 text-sm text-gray-400 bg-yellow-50 p-2 rounded-lg border border-yellow-200">
+                            💡 Gợi ý: <span id="hint-text">Hoàn thành công việc</span>
+                        </div>
+                    </div>
+
+                    <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+
+                    <div class="flex justify-between mt-6">
+                        <button onclick="closeExerciseModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-all">
+                            ✕ Đóng
+                        </button>
+                        <div>
+                            <button id="exercise-next-btn" onclick="nextExerciseQuestion()" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all">
+                                Tiếp theo →
+                            </button>
+                            <button id="exercise-submit-btn" onclick="submitExercise()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all hidden">
+                                📊 Nộp bài
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Result Area -->
+                <div id="exercise-result-area" class="hidden overflow-y-auto max-h-[calc(90vh-120px)]">
+                    <div class="text-center py-6">
+                        <div class="text-6xl mb-2">📊</div>
+                        <div class="text-5xl font-bold text-indigo-600" id="result-score">8/10</div>
+                        <p id="result-level" class="text-lg mt-2 font-medium text-gray-700">🌟 Xuất sắc!</p>
+                    </div>
+
+                    <div class="bg-gray-50 rounded-xl p-4">
+                        <h5 class="font-semibold text-gray-700 mb-2">💡 Đề xuất ôn tập:</h5>
+                        <ul id="result-recommendations" class="space-y-1"></ul>
+                    </div>
+
+                    <div class="flex justify-center gap-3 mt-4">
+                        <button onclick="closeExerciseModal()" class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all">
+                            ✕ Đóng
+                        </button>
+                        <button onclick="location.reload()" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all">
+                            🔄 Làm lại
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const container = document.createElement('div');
+    container.innerHTML = modalHTML;
+    document.body.appendChild(container.firstElementChild);
+}
+
+// CẬP NHẬT HÀM closeExerciseModal
+function closeExerciseModal() {
+    stopExerciseTimer();
+    const modal = document.getElementById('exerciseModal');
+    if (modal) modal.classList.add('hidden');
+    // Reset timer display
+    const timerDisplay = document.getElementById('timer-display');
+    if (timerDisplay) {
+        timerDisplay.textContent = '⏱️ 05:00';
+        timerDisplay.style.color = '#6b7280';
     }
 }

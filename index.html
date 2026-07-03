@@ -159,7 +159,9 @@
         </div>
     </div>
 
+    <!-- ============================================================ -->
     <!-- ========== MODAL LỘ TRÌNH HỌC ========== -->
+    <!-- ============================================================ -->
     <div id="pathModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 hidden backdrop-blur-sm">
         <div class="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] p-6 shadow-2xl overflow-hidden animate-scale-up">
             <div class="flex justify-between items-center mb-4">
@@ -179,7 +181,9 @@
         </div>
     </div>
 
+    <!-- ============================================================ -->
     <!-- ========== MODAL BÀI TẬP ========== -->
+    <!-- ============================================================ -->
     <div id="exerciseModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 hidden backdrop-blur-sm">
         <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] p-6 shadow-2xl overflow-hidden animate-scale-up">
             <div class="flex justify-between items-center mb-4">
@@ -351,6 +355,34 @@
                 @keyframes scaleUp {
                     from { opacity: 0; transform: scale(0.9) translateY(20px) }
                     to { opacity: 1; transform: scale(1) translateY(0) }
+                }
+                .option-btn { transition: all 0.2s; }
+                .option-btn:hover:not(:disabled) { border-color: #6366f1; background: #f8f7ff; }
+                .option-btn.selected { border-color: #6366f1; background: #eef2ff; }
+                .option-btn:disabled { cursor: not-allowed; opacity: 0.7; }
+                .day-card { transition: all 0.2s; }
+                .day-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+                #pathContent::-webkit-scrollbar,
+                #exercise-question-area::-webkit-scrollbar,
+                #exercise-result-area::-webkit-scrollbar {
+                    width: 4px;
+                }
+                #pathContent::-webkit-scrollbar-track,
+                #exercise-question-area::-webkit-scrollbar-track,
+                #exercise-result-area::-webkit-scrollbar-track {
+                    background: #f1f1f1;
+                    border-radius: 10px;
+                }
+                #pathContent::-webkit-scrollbar-thumb,
+                #exercise-question-area::-webkit-scrollbar-thumb,
+                #exercise-result-area::-webkit-scrollbar-thumb {
+                    background: #c4b5fd;
+                    border-radius: 10px;
+                }
+                #pathContent::-webkit-scrollbar-thumb:hover,
+                #exercise-question-area::-webkit-scrollbar-thumb:hover,
+                #exercise-result-area::-webkit-scrollbar-thumb:hover {
+                    background: #8b5cf6;
                 }
             `;
             document.head.appendChild(style);

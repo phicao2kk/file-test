@@ -103,6 +103,7 @@ function addWrongWord(vi, en, topic) {
         attempts: 1
     });
     localStorage.setItem("wrongWords", JSON.stringify(wrongWords));
+    updateWrongCountBadge();
 }
 
 function getWrongWords() {
@@ -112,6 +113,20 @@ function getWrongWords() {
 function clearWrongWords() {
     wrongWords = [];
     localStorage.setItem("wrongWords", JSON.stringify(wrongWords));
+    updateWrongCountBadge();
+}
+
+function updateWrongCountBadge() {
+    const badge = document.getElementById("wrongCountBadge");
+    if (badge) {
+        const count = getWrongWords().length;
+        if (count > 0) {
+            badge.textContent = count > 99 ? "99+" : count;
+            badge.classList.remove("hidden");
+        } else {
+            badge.classList.add("hidden");
+        }
+    }
 }
 
 // ==================== DOM elements ====================
@@ -373,6 +388,17 @@ function highlightActiveTopic() {
     updateTopicName();
 }
 
+// ==================== HÀM ĐÓNG MODAL ====================
+function closePathModal() {
+    const modal = document.getElementById('pathModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function closeExerciseModal() {
+    const modal = document.getElementById('exerciseModal');
+    if (modal) modal.classList.add('hidden');
+}
+
 // ==================== TÍNH NĂNG MỚI: GỢI Ý LỘ TRÌNH HỌC ====================
 function showStudyPath() {
     const pathGenerator = new StudyPathGenerator();
@@ -463,14 +489,26 @@ function renderPathContent(path) {
 }
 
 function createPathModal() {
+    // Modal đã có sẵn trong HTML, chỉ cần đảm bảo tồn tại
+    if (document.getElementById('pathModal')) return;
+    
     const modalHTML = `
-        <div id="pathModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 hidden">
-            <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] p-6 shadow-2xl overflow-hidden">
+        <div id="pathModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 hidden backdrop-blur-sm">
+            <div class="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] p-6 shadow-2xl overflow-hidden animate-scale-up">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">🗺️ Lộ trình học thông minh</h3>
-                    <button onclick="document.getElementById('pathModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+                    <h3 class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
+                        <i class="fas fa-map-signs text-indigo-600"></i> Lộ trình học thông minh
+                    </h3>
+                    <button onclick="closePathModal()" class="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                        ✕
+                    </button>
                 </div>
-                <div id="pathContent" class="overflow-y-auto max-h-[calc(90vh-120px)]"></div>
+                <div id="pathContent" class="overflow-y-auto max-h-[calc(90vh-120px)] pr-2">
+                    <div class="text-center py-12 text-gray-400">
+                        <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                        <p>Đang phân tích dữ liệu học tập...</p>
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -487,6 +525,11 @@ function startExercise() {
     
     // Nếu chưa học từ nào, lấy từ chủ đề hiện tại
     const words = learnedWordsList.length > 0 ? learnedWordsList : vocabulary[currentTopic]?.words || [];
+    
+    if (words.length === 0) {
+        alert('Chưa có từ vựng để làm bài tập! Hãy học một vài từ trước nhé!');
+        return;
+    }
     
     const exercise = exerciseGenerator.generateExercise(words, {
         difficulty: 'medium',
@@ -572,6 +615,12 @@ function renderExerciseQuestion() {
         input.className = 'w-full p-3 border-2 border-gray-200 rounded-lg text-lg';
         input.onchange = (e) => {
             window.userAnswers[index] = e.target.value;
+        };
+        input.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                window.userAnswers[index] = e.target.value;
+                document.getElementById('exercise-submit-btn')?.click();
+            }
         };
         optionsContainer.appendChild(input);
         setTimeout(() => input.focus(), 100);
@@ -672,17 +721,24 @@ function showExerciseResult() {
 }
 
 function createExerciseModal() {
+    // Modal đã có sẵn trong HTML, chỉ cần đảm bảo tồn tại
+    if (document.getElementById('exerciseModal')) return;
+    
     const modalHTML = `
-        <div id="exerciseModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 hidden">
-            <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] p-6 shadow-2xl overflow-hidden">
+        <div id="exerciseModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 hidden backdrop-blur-sm">
+            <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] p-6 shadow-2xl overflow-hidden animate-scale-up">
                 <div class="flex justify-between items-center mb-4">
                     <div>
-                        <h3 id="exercise-title" class="text-xl font-bold text-indigo-600">📝 Bài tập từ vựng</h3>
+                        <h3 id="exercise-title" class="text-xl font-bold text-indigo-600 flex items-center gap-2">
+                            <i class="fas fa-pencil-alt"></i> Bài tập từ vựng
+                        </h3>
                         <p id="exercise-desc" class="text-sm text-gray-500">Thực hành với ngữ cảnh thực tế</p>
                     </div>
-                    <button onclick="document.getElementById('exerciseModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+                    <button onclick="closeExerciseModal()" class="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                        ✕
+                    </button>
                 </div>
-                
+
                 <!-- Progress -->
                 <div class="mb-4">
                     <div class="flex justify-between text-sm text-gray-600">
@@ -690,12 +746,12 @@ function createExerciseModal() {
                         <span id="timer-display">⏱️ 00:30</span>
                     </div>
                     <div class="w-full h-2 bg-gray-200 rounded-full mt-1">
-                        <div id="progress-bar" class="h-2 bg-indigo-600 rounded-full transition-all" style="width:10%"></div>
+                        <div id="progress-bar" class="h-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all" style="width:10%"></div>
                     </div>
                 </div>
-                
+
                 <!-- Question Area -->
-                <div id="exercise-question-area" class="overflow-y-auto max-h-[calc(90vh-220px)]">
+                <div id="exercise-question-area" class="overflow-y-auto max-h-[calc(90vh-250px)]">
                     <div class="bg-gray-50 rounded-xl p-4 mb-4">
                         <p id="question-number" class="text-sm text-indigo-600 font-semibold">Câu hỏi 1/10</p>
                         <p id="question-text" class="text-lg font-medium mt-1">Chọn từ đúng để hoàn thành câu:</p>
@@ -703,28 +759,28 @@ function createExerciseModal() {
                             I need to ______ my homework before the deadline.
                         </div>
                         <div id="meaning-display" class="text-sm text-gray-500 mt-2">📖 Nghĩa: hoàn thành</div>
-                        <div id="hint-area" class="mt-2 text-sm text-gray-400">
+                        <div id="hint-area" class="mt-2 text-sm text-gray-400 bg-yellow-50 p-2 rounded-lg border border-yellow-200">
                             💡 Gợi ý: <span id="hint-text">Hoàn thành công việc đúng hạn</span>
                         </div>
                     </div>
-                    
+
                     <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
-                    
+
                     <div class="flex justify-between mt-6">
-                        <button onclick="document.getElementById('exerciseModal').classList.add('hidden')" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
+                        <button onclick="closeExerciseModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-all">
                             ✕ Đóng
                         </button>
                         <div>
-                            <button id="exercise-next-btn" onclick="nextExerciseQuestion()" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                            <button id="exercise-next-btn" onclick="nextExerciseQuestion()" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all">
                                 Tiếp theo →
                             </button>
-                            <button id="exercise-submit-btn" onclick="submitExercise()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 hidden">
+                            <button id="exercise-submit-btn" onclick="submitExercise()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all hidden">
                                 📊 Nộp bài
                             </button>
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Result Area -->
                 <div id="exercise-result-area" class="hidden overflow-y-auto max-h-[calc(90vh-120px)]">
                     <div class="text-center py-6">
@@ -732,18 +788,18 @@ function createExerciseModal() {
                         <div class="text-5xl font-bold text-indigo-600" id="result-score">8/10</div>
                         <p id="result-level" class="text-lg mt-2 font-medium text-gray-700">🌟 Xuất sắc!</p>
                     </div>
-                    
+
                     <div class="bg-gray-50 rounded-xl p-4">
                         <h5 class="font-semibold text-gray-700 mb-2">💡 Đề xuất ôn tập:</h5>
                         <ul id="result-recommendations" class="space-y-1"></ul>
                     </div>
-                    
+
                     <div class="flex justify-center gap-3 mt-4">
-                        <button onclick="location.reload()" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
-                            🔄 Làm lại
-                        </button>
-                        <button onclick="document.getElementById('exerciseModal').classList.add('hidden')" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
+                        <button onclick="closeExerciseModal()" class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all">
                             ✕ Đóng
+                        </button>
+                        <button onclick="location.reload()" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all">
+                            🔄 Làm lại
                         </button>
                     </div>
                 </div>
@@ -856,6 +912,7 @@ function init() {
     renderTopics();
     selectNewWord();
     updateStreak();
+    updateWrongCountBadge();
     
     checkBtn.addEventListener("click", checkAnswer);
     nextBtn.addEventListener("click", nextWord);
@@ -884,7 +941,7 @@ function init() {
         collapseBtn.addEventListener("click", collapseTopics);
     }
     
-    // Gắn sự kiện cho các nút tính năng mới (nếu có)
+    // Gắn sự kiện cho các nút tính năng mới
     const pathBtn = document.getElementById("pathBtn");
     if (pathBtn) pathBtn.addEventListener("click", showStudyPath);
     
@@ -901,8 +958,12 @@ function init() {
     if (wrongExerciseBtn) wrongExerciseBtn.addEventListener("click", startWrongWordsExercise);
 }
 
-// Tạo các class cần thiết cho tính năng mới (sẽ được định nghĩa trong file riêng)
-// StudyPathGenerator và ContextExerciseGenerator được import từ các file riêng
+// ====== EXPORT CÁC HÀM RA GLOBAL ======
+// Để có thể gọi từ HTML onclick
+window.closePathModal = closePathModal;
+window.closeExerciseModal = closeExerciseModal;
+window.nextExerciseQuestion = nextExerciseQuestion;
+window.submitExercise = submitExercise;
 
 // Khởi chạy
 init();
